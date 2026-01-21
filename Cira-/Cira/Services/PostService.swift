@@ -25,8 +25,9 @@ final class PostService {
         chapter: Chapter? = nil,
         modelContext: ModelContext
     ) async throws -> Photo {
-        // Create Photo
+        // Create Photo with pending sync status
         let photo = Photo(imageData: imageData)
+        photo.syncStatus = .pending
         
         // Handle Live Photo movie - copy to documents
         if let movieURL = livePhotoMovieURL {
@@ -85,17 +86,23 @@ final class PostService {
         // Insert photo
         modelContext.insert(photo)
         
-        // Save
+        // Save locally first (offline-first)
         try modelContext.save()
         
         if let chapter = chapter {
-            print("✅ Post saved to chapter '\(chapter.name)' with ID: \(photo.id)")
+            print("✅ Post saved locally to chapter '\(chapter.name)' with ID: \(photo.id)")
         } else {
-            print("✅ Single post saved with ID: \(photo.id)")
+            print("✅ Single post saved locally with ID: \(photo.id)")
+        }
+        
+        // Trigger cloud sync (non-blocking)
+        Task {
+            await SyncManager.shared.syncPendingPosts()
         }
         
         return photo
     }
+
     
     // MARK: - Fetch All Posts
     func fetchPosts(modelContext: ModelContext) -> [Photo] {

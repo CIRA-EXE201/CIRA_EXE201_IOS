@@ -16,6 +16,7 @@ struct HomeView: View {
     @State private var showNotifications = false
     @State private var showAddOptions = false
     @State private var showProfile = false
+    @State private var showAddFriends = false
     @State private var profileDragOffset: CGFloat = 0
     @State private var cardDragOffset: CGFloat = 0 // For card swipe animation
     @State private var selectedWallId: UUID? = nil // nil = "All posts"
@@ -25,7 +26,11 @@ struct HomeView: View {
         GeometryReader { geometry in
             ZStack {
                 // Profile View (slides from left) - full screen
-                ProfileView()
+                ProfileView(onClose: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        showProfile = false
+                    }
+                })
                     .frame(width: geometry.size.width)
                     .offset(x: showProfile ? 0 : -geometry.size.width)
                 
@@ -383,11 +388,28 @@ struct HomeView: View {
                 
                 // Friends category
                 categoryTabView(category: .friends, members: viewModel.friendWalls)
+                
+                // Add Friends button
+                Button(action: { showAddFriends = true }) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            Circle()
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1.5)
+                                .background(Circle().fill(Color.white))
+                        )
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
         }
         .scrollClipDisabled() // Don't clip content
         .background(Color.clear)
+        .sheet(isPresented: $showAddFriends) {
+            AddFriendsView()
+        }
     }
     
     // MARK: - Category Tab View

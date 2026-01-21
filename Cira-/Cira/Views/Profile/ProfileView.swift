@@ -6,25 +6,46 @@
 //
 
 import SwiftUI
+import Supabase
+import SwiftData
+
+// MARK: - Profile Data Model
+struct ProfileData: Decodable {
+    let username: String?
+    let avatar_data: String?
+    let bio: String?
+    let created_at: String?
+}
+
+struct ScrollViewOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
 
 struct ProfileView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+    // MARK: - SwiftData
+    @Environment(\.modelContext) private var modelContext
+    
+    var onClose: (() -> Void)? = nil
     @State private var showSubscription = false
     
-    // Mock data - photos for specific days (month-day: color placeholder)
-    // Format: "MM-DD" -> Color
-    private let photosData: [String: Color] = [
-        "12-01": .gray,
-        "12-07": .gray,
-        "11-15": .gray,
-        "11-20": .gray,
-        "10-05": .gray
-    ]
+    // Profile data from Supabase
+    @State private var profileData: ProfileData?
+    @State private var isLoading = true
     
-    // Streak data
-    private let currentStreak: Int = 5
-    private let totalMemories: Int = 42
+    // MARK: - Calendar Data
+    // Key: "MM-dd" -> Array of thumbnail data (max 2 items)
+    @State private var calendarPhotos: [String: [Data]] = [:]
+    
+    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+    
+    // Streak
+    @State private var currentStreak: Int = 0
+    
+    // Scroll Tracking
+    @State private var scrollOffset: CGFloat = 0
     
     var body: some View {
         ZStack {
@@ -36,11 +57,13 @@ struct ProfileView: View {
                 // Header with back button and Gold button
                 headerView
                     .padding(.top, 8)
+                    .zIndex(1) // Ensure header is above scroll content
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
                         // User Info - Avatar left, Name right
                         userInfoSection
+                            .opacity(scrollOffset < -50 ? 0 : 1) // Fade out effect
                         
                         // Streak highlight card
                         streakCard
@@ -52,6 +75,21 @@ struct ProfileView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .preference(
+                                    key: ScrollViewOffsetPreferenceKey.self,
+                                    value: proxy.frame(in: .named("scroll")).minY
+                                )
+                        }
+                    )
+                }
+                .coordinateSpace(name: "scroll")
+                .onPreferenceChange(ScrollViewOffsetPreferenceKey.self) { value in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scrollOffset = value
+                    }
                 }
             }
         }
@@ -61,26 +99,156 @@ struct ProfileView: View {
                 .presentationDragIndicator(.hidden)
                 .presentationCornerRadius(32)
         }
+        .onAppear {
+            fetchProfile()
+        }
+        .task(id: selectedYear) {
+            await fetchCalendarPhotos(for: selectedYear)
+        }
+    }
+    
+    // MARK: - Fetch Calendar Photos
+    private func fetchCalendarPhotos(for year: Int) async {
+        let calendar = Calendar.current
+        
+        // Date range for the entire year
+        guard let startDate = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+              let endOfYear = calendar.date(from: DateComponents(year: year, month: 12, day: 31)),
+              let endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endOfYear) else {
+            return
+        }
+        
+        // Fetch descriptor
+        let predicate = #Predicate<Photo> { photo in
+            photo.createdAt >= startDate && photo.createdAt <= endDate
+        }
+        
+        let descriptor = FetchDescriptor<Photo>(
+            predicate: predicate,
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        
+        do {
+            let photos = try modelContext.fetch(descriptor)
+            
+            // Group by "MM-dd" and keep top 2
+            var newCalendarPhotos: [String: [Data]] = [:]
+            
+            for photo in photos {
+                guard let thumbnailData = photo.thumbnailData ?? photo.imageData else { continue }
+                
+                let month = calendar.component(.month, from: photo.createdAt)
+                let day = calendar.component(.day, from: photo.createdAt)
+                let key = String(format: "%02d-%02d", month, day)
+                
+                if newCalendarPhotos[key] == nil {
+                    newCalendarPhotos[key] = []
+                }
+                
+                if newCalendarPhotos[key]!.count < 2 {
+                    newCalendarPhotos[key]!.append(thumbnailData)
+                }
+            }
+            
+            await MainActor.run {
+                self.calendarPhotos = newCalendarPhotos
+            }
+            
+            // Calculate stats after fetching photos
+            await calculateStats()
+        } catch {
+            print("❌ Failed to fetch calendar photos: \(error)")
+        }
+    }
+    
+    // MARK: - Calculate Stats (Streak)
+    private func calculateStats() async {
+        let descriptor = FetchDescriptor<Photo>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        
+        do {
+            let allPhotos = try modelContext.fetch(descriptor)
+            
+            // Calculate Streak
+            var streak = 0
+            let calendar = Calendar.current
+            let today = calendar.startOfDay(for: Date())
+            let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+            
+            // Get unique days with photos
+            let uniqueDays = Set(allPhotos.map { calendar.startOfDay(for: $0.createdAt) })
+            
+            // Check if streak is active (has photo Today OR Yesterday)
+            if uniqueDays.contains(today) || uniqueDays.contains(yesterday) {
+                // Streak is alive, calculate length
+                var checkDate = today 
+                
+                // If no photo today but has yesterday, start checking from yesterday
+                if !uniqueDays.contains(today) && uniqueDays.contains(yesterday) {
+                   checkDate = yesterday
+                }
+                
+                while uniqueDays.contains(checkDate) {
+                    streak += 1
+                    checkDate = calendar.date(byAdding: .day, value: -1, to: checkDate)!
+                }
+            } else {
+                streak = 0
+            }
+            
+            await MainActor.run {
+                self.currentStreak = streak
+            }
+        } catch {
+            print("❌ Failed to calculate stats: \(error)")
+        }
+    }
+    
+    // MARK: - Fetch Profile
+    private func fetchProfile() {
+        Task {
+            guard let userId = SupabaseManager.shared.currentUser?.id else {
+                isLoading = false
+                return
+            }
+            
+            do {
+                let profile: ProfileData = try await SupabaseManager.shared.client
+                    .from("profiles")
+                    .select("username, avatar_data, bio, created_at")
+                    .eq("id", value: userId.uuidString)
+                    .single()
+                    .execute()
+                    .value
+                
+                profileData = profile
+            } catch {
+                print("Failed to fetch profile: \(error)")
+            }
+            isLoading = false
+        }
+    }
+    
+    // MARK: - Format Joined Date
+    private func formattedJoinDate() -> String {
+        guard let dateString = profileData?.created_at else {
+            return "Joined recently"
+        }
+        
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        if let date = isoFormatter.date(from: dateString) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "MMMM yyyy"
+            return "Joined " + displayFormatter.string(from: date)
+        }
+        return "Joined recently"
     }
     
     // MARK: - Header
     private var headerView: some View {
-        HStack(spacing: 16) {
-            // Back button
-            Button(action: { dismiss() }) {
-                Image(systemName: "chevron.left")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.primary)
-            }
-            
-            Spacer()
-            
-            Text("Profile")
-                .font(.headline)
-            
-            Spacer()
-            
-            // Subscription button - Gold with Apple Liquid Glass
+        HStack {
+            // Subscription button - Gold (now on left)
             Button(action: {
                 showSubscription = true
             }) {
@@ -105,9 +273,63 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             .glassEffect(.regular.interactive())
+            
+            Spacer()
+            
+            // Collapsed State: Username
+            if scrollOffset < -50 {
+                Text(profileData?.username ?? "User")
+                    .font(.headline)
+                    .transition(.opacity)
+            } else {
+                Text("Profile")
+                    .font(.headline)
+                    .transition(.opacity)
+            }
+            
+            Spacer()
+            
+            // Right Side Container
+            HStack(spacing: 12) {
+                // Collapsed State: Avatar
+                if scrollOffset < -50 {
+                    if let avatarBase64 = profileData?.avatar_data,
+                       let imageData = Data(base64Encoded: avatarBase64),
+                       let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 36, height: 36)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                            .transition(.scale.combined(with: .opacity))
+                    } else {
+                        // Fallback Avatar Icon
+                         Circle()
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(width: 36, height: 36)
+                            .overlay {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.gray)
+                            }
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                
+                // Back button (now on right)
+                Button(action: { onClose?() }) {
+                    Image(systemName: "chevron.right")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
+        .animation(.easeInOut, value: scrollOffset)
     }
     
     // MARK: - User Info (Avatar left, Name right)
@@ -121,18 +343,28 @@ struct ProfileView: View {
                 )
                 .frame(width: 80, height: 80)
                 .overlay {
-                    Circle()
-                        .fill(Color.gray.opacity(0.1))
-                        .frame(width: 74, height: 74)
-                        .overlay {
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 30))
-                                .foregroundStyle(.gray)
-                        }
+                    if let avatarBase64 = profileData?.avatar_data,
+                       let imageData = Data(base64Encoded: avatarBase64),
+                       let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 74, height: 74)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(width: 74, height: 74)
+                            .overlay {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 30))
+                                    .foregroundStyle(.gray)
+                            }
+                    }
                 }
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("User")
+                Text(profileData?.username ?? "User")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
@@ -144,11 +376,11 @@ struct ProfileView: View {
                     .frame(maxWidth: 120)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("@username")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    Text("@\(profileData?.username?.lowercased() ?? "username")")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                     
-                    Text("Joined December 2025")
+                    Text(formattedJoinDate())
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -160,8 +392,10 @@ struct ProfileView: View {
     
     // MARK: - Streak Card
     private var streakCard: some View {
-        HStack(spacing: 20) {
-            // Streak
+        HStack {
+            Spacer()
+            
+            // Streak content only
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     Text("🔥")
@@ -175,28 +409,10 @@ struct ProfileView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity)
             
-            // Divider
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(width: 1, height: 40)
+            Spacer()
             
-            // Total memories
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    Text("📸")
-                        .font(.title2)
-                    Text("\(totalMemories)")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.black)
-                }
-                Text("memories")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
+            // Memories section removed per user request
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
@@ -279,7 +495,7 @@ struct ProfileView: View {
             
             // Calendar grid - 7 columns
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 8) {
-                ForEach(daysInMonth(for: monthDate), id: \.self) { day in
+                ForEach(Array(daysInMonth(for: monthDate).enumerated()), id: \.offset) { index, day in
                     if day == 0 {
                         // Empty cell
                         Color.clear
@@ -301,26 +517,52 @@ struct ProfileView: View {
     
     private func dayCellView(day: Int, monthDate: Date) -> some View {
         let photoKey = getPhotoKey(day: day, monthDate: monthDate)
-        let hasPhoto = photosData[photoKey] != nil
+        let photos = calendarPhotos[photoKey] ?? []
+        let hasPhoto = !photos.isEmpty
         let isToday = isCurrentDay(day, in: monthDate)
         
         return VStack(spacing: 2) {
-            // Photo thumbnail or empty cell
+            // Thumbnail container
             ZStack {
                 if hasPhoto {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(photosData[photoKey] ?? .gray)
-                        .aspectRatio(1, contentMode: .fit)
+                    // Render Stacked Photos
+                    ZStack {
+                        // Bottom Photo (if exists, indexed 1 in our reverse sorted array)
+                        if photos.count > 1, let uiImage = UIImage(data: photos[1]) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .rotationEffect(.degrees(6)) // Rotate for stack effect
+                                .offset(x: 2, y: 0) // Slight offset
+                                .opacity(0.8)
+                        }
+                        
+                        // Top Photo (indexed 0)
+                        if let uiImage = UIImage(data: photos[0]) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        }
+                    }
+                    .aspectRatio(1, contentMode: .fit)
+                    
                 } else {
+                    // Empty Placeholder
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color.gray.opacity(0.08))
                         .aspectRatio(1, contentMode: .fit)
                 }
                 
-                // Today indicator
+                // Today indicator (Border)
                 if isToday {
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(Color.black, lineWidth: 2)
+                        .aspectRatio(1, contentMode: .fit)
                 }
             }
             
@@ -337,8 +579,16 @@ struct ProfileView: View {
         let calendar = Calendar.current
         var months: [Date] = []
         
-        // Get all 12 months of the selected year (in reverse order - December to January)
-        for month in stride(from: 12, through: 1, by: -1) {
+        let currentYear = calendar.component(.year, from: Date())
+        let currentMonth = calendar.component(.month, from: Date())
+        
+        // Determine start month
+        // If viewing current year: start from current month
+        // If viewing past year: start from 12
+        let startMonth = (selectedYear == currentYear) ? currentMonth : 12
+        
+        // Get months in reverse order (e.g., Dec -> Jan, or Current -> Jan)
+        for month in stride(from: startMonth, through: 1, by: -1) {
             var components = DateComponents()
             components.year = selectedYear
             components.month = month
@@ -354,7 +604,7 @@ struct ProfileView: View {
     
     private func monthName(for date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.locale = Locale(identifier: "vi_VN") // Keep localized as requested
         formatter.dateFormat = "MMMM"
         return formatter.string(from: date).capitalized
     }

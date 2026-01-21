@@ -12,7 +12,7 @@ xcuserdata/
 ## Xcode Patch
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
-!*.xcodeproj/xcshareddata/
+xcshareddata/
 !*.xcodeproj/project.xcworkspace/
 
 ## Build generated
@@ -134,3 +134,11 @@ Temporary Items
 # Misc
 *.log
 *.tmp
+Secrets.json
+Cira-.xcodeproj/
+
+# Supabase
+**/supabase/.temp/
+
+# Google Auth
+*.apps.googleusercontent.com.plist
