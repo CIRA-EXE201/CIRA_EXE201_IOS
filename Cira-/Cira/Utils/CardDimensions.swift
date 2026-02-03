@@ -9,43 +9,25 @@ import SwiftUI
 
 /// Helper to calculate card dimensions consistently across the app
 struct CardDimensions {
-    /// Space reserved for voice bar at bottom
-    static let voiceBarSpace: CGFloat = 70
     
-    /// Horizontal padding (total = 25pt, roughly 12.5pt each side)
-    static let horizontalPadding: CGFloat = 25
+    // MARK: - Constants
+    static let horizontalPadding: CGFloat = 32 // 16pt each side
+    static let cornerRadius: CGFloat = 40
     
-    /// Vertical padding
-    static let verticalPadding: CGFloat = 25
+    // Layout Constants matching CameraView
+    static let topSpace: CGFloat = 8
+    static let controlsHeight: CGFloat = 80 // Reduced slighly from 90 to fit better
+    static let extraBottomSpacing: CGFloat = 110 // Reduced from 130 to increase card height
     
-    /// Extra vertical padding for compact mode (camera preview, etc.)
-    static let compactExtraPadding: CGFloat = 100
+    // MARK: - Calculation
+    static func calculateMainCardSize(screenSize: CGSize, safeArea: EdgeInsets) -> CGSize {
+        // Redesign: Return full screen size for immersive experience
+        return screenSize
+    }
     
-    /// Card corner radius
-    static let cornerRadius: CGFloat = 24
-    
-    /// Calculate card size based on available geometry
-    /// - Parameters:
-    ///   - geometry: The GeometryProxy from GeometryReader
-    ///   - includeVoiceBar: Whether to account for voice bar space (true for HomeView)
-    ///   - compact: Whether to use compact mode (smaller card for camera preview state)
-    /// - Returns: A tuple of (width, height)
-    static func calculate(
-        geometry: GeometryProxy,
-        includeVoiceBar: Bool = true,
-        compact: Bool = false
-    ) -> (width: CGFloat, height: CGFloat) {
-        let width = geometry.size.width - horizontalPadding
-        var height = geometry.size.height - verticalPadding
-        
-        if includeVoiceBar {
-            height -= voiceBarSpace
-        }
-        
-        if compact {
-            height -= compactExtraPadding
-        }
-        
-        return (width, height)
+    static func topSpacing(safeArea: EdgeInsets) -> CGFloat {
+        let topBarPadding = safeArea.top > 0 ? safeArea.top : 44 // Removed +10
+        let topBarHeight: CGFloat = 44
+        return topBarPadding + topBarHeight + topSpace
     }
 }

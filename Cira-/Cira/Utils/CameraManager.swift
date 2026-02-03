@@ -362,6 +362,18 @@ class CameraManager: NSObject, ObservableObject {
         print("📷 Live Photo toggled: \(isLivePhotoEnabled)")
     }
     
+    // MARK: - Set Zoom
+    func setZoom(level: CGFloat) {
+        guard let device = videoDeviceInput?.device else { return }
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, min(level, device.maxAvailableVideoZoomFactor))
+            device.unlockForConfiguration()
+        } catch {
+            print("Zoom error: \(error)")
+        }
+    }
+    
     // MARK: - Save Live Photo to Library (per Apple docs)
     func saveLivePhotoToLibrary(completion: @escaping (Bool) -> Void) {
         guard let photoData = capturedPhotoData ?? capturedImage?.jpegData(compressionQuality: 1.0),

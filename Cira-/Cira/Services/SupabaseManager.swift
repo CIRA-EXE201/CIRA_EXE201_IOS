@@ -116,4 +116,33 @@ final class SupabaseManager {
         
         return path
     }
+    
+    // MARK: - Download Helpers
+    func downloadFile(bucket: String, path: String) async throws -> Data {
+        let data = try await client.storage
+            .from(bucket)
+            .download(path: path)
+        return data
+    }
+    
+    func fetchUserPosts(userId: String, after date: Date? = nil) async throws -> [PostDTO] {
+        var query = client
+            .from("posts")
+            .select() // Select all fields
+            .eq("owner_id", value: userId)
+            
+        if let startDate = date {
+            // Delta Sync: Only get posts updated AFTER the last sync
+            let dateString = ISO8601DateFormatter().string(from: startDate)
+            query = query.gt("updated_at", value: dateString)
+        }
+            
+        // Apply sorting at the end
+        let posts: [PostDTO] = try await query
+            .order("updated_at", ascending: false) 
+            .execute()
+            .value
+        
+        return posts
+    }
 }

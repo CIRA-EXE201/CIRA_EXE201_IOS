@@ -3,6 +3,7 @@
 //  Cira
 //
 //  Camera tab - Capture photos and record voice
+//  Dark Theme Redesign
 //
 
 import SwiftUI
@@ -29,6 +30,11 @@ struct CameraView: View {
     @State private var isSaving = false
     @State private var showChapterPicker = false
     @State private var selectedChapter: Chapter? = nil
+    @State private var zoomLevel: CGFloat = 1.0
+    
+    // Safe area spacing passed from parent
+    var topSafeArea: CGFloat = 0
+    var bottomSafeArea: CGFloat = 0
     
     // Mock chapters data
     private let chapters: [ChapterPreview] = [
@@ -39,26 +45,69 @@ struct CameraView: View {
     ]
     
     var body: some View {
-        ZStack {
-            // Background
-            Color.black
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            // Calculate sizes based on FULL screen size (just like FeedPostContainer)
+            let safeArea = EdgeInsets(top: topSafeArea, leading: 0, bottom: bottomSafeArea, trailing: 0)
+            let cardSize = CardDimensions.calculateMainCardSize(screenSize: geometry.size, safeArea: safeArea)
+            // Use standardized topSpacing
+            let topSpacing = CardDimensions.topSpacing(safeArea: safeArea)
             
-            VStack(spacing: 0) {
-                // Top bar - changes based on state
-                topBar
-                    .padding(.top, 10)
-                    .padding(.horizontal, 20)
-                
-                Spacer().frame(height: 8)
-                
-                // Main content area
-                mainContentArea
-            }
+            // MARK: - Layout Constants (MUST match FeedPostContainer)
+            // 1. Defined Page Margins
+            let headerInset: CGFloat = topSafeArea + 60 // Space for Floating Header
+            let footerInset: CGFloat = bottomSafeArea + 10 // Space for Home Indicator
             
-            // Permission denied overlay
-            if !cameraManager.permissionGranted && cameraManager.error == .permissionDenied {
-                permissionDeniedView
+            // 2. Component Heights
+            let controlsHeight: CGFloat = 110 // Fixed height for Controls (same as FeedPostContainer)
+            let gapHeight: CGFloat = 16 // Standard Gap
+            
+            // 3. Dynamic Calculation - Same as FeedPostContainer
+            // Available for Image Card = Screen - Header - Gap - Controls - Footer
+            let cardHeight = max(geometry.size.height - headerInset - gapHeight - controlsHeight - footerInset, 100)
+            let cardWidth = geometry.size.width
+            
+            ZStack {
+                // Background - White with gradient and noise
+                GradientNoiseBackground()
+                
+                VStack(spacing: 0) {
+                    // A. Header Spacer (Push content down) - Same as FeedPostContainer
+                    Spacer()
+                        .frame(height: headerInset)
+                    
+                    // B. Camera/Photo Frame - Same size as PostCardView
+                    Group {
+                        if cameraState == .preview {
+                            cameraPreviewFrame(width: cardWidth, height: cardHeight)
+                        } else {
+                            capturedPhotoFrame(width: cardWidth, height: cardHeight)
+                        }
+                    }
+                    .frame(width: cardWidth, height: cardHeight)
+                    
+                    // C. Gap - Same as FeedPostContainer
+                    Spacer()
+                        .frame(height: gapHeight)
+                    
+                    // D. Controls Area
+                    VStack {
+                        if cameraState == .preview {
+                            captureControls
+                        } else {
+                            postCaptureControls
+                        }
+                    }
+                    .frame(height: controlsHeight, alignment: .top)
+                    
+                    // E. Footer Spacer - Same as FeedPostContainer
+                    Spacer()
+                        .frame(height: footerInset)
+                }
+                
+                // Permission denied overlay
+                if !cameraManager.permissionGranted && cameraManager.error == .permissionDenied {
+                    permissionDeniedView
+                }
             }
         }
         .onAppear {
@@ -74,21 +123,6 @@ struct CameraView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     cameraState = .captured
                 }
-            }
-        }
-        .onChange(of: cameraManager.livePhotoMovieURL) { _, newURL in
-            // Create PHLivePhoto for playback when movie URL is ready
-            // Both photo data and movie URL must be available
-            if newURL != nil && cameraManager.capturedPhotoData != nil {
-                print("📷 Both photo and movie ready - creating PHLivePhoto...")
-                cameraManager.createLivePhotoForPlayback()
-            }
-        }
-        .onChange(of: cameraManager.capturedPhotoData) { _, newData in
-            // Also check when photo data arrives (in case movie was ready first)
-            if newData != nil && cameraManager.livePhotoMovieURL != nil {
-                print("📷 Photo data arrived - creating PHLivePhoto...")
-                cameraManager.createLivePhotoForPlayback()
             }
         }
         .onChange(of: cameraState) { _, newState in
@@ -123,18 +157,18 @@ struct CameraView: View {
     private var permissionDeniedView: some View {
         VStack(spacing: 20) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 50))
-                .foregroundStyle(.white.opacity(0.5))
+            .font(.system(size: 50))
+            .foregroundStyle(.white.opacity(0.5))
             
             Text("Camera Access Required")
-                .font(.headline)
-                .foregroundStyle(.white)
+            .font(.headline)
+            .foregroundStyle(.white)
             
             Text("Please enable camera access in Settings to capture photos")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.7))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+            .font(.subheadline)
+            .foregroundStyle(.white.opacity(0.7))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 40)
             
             Button(action: {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -142,115 +176,59 @@ struct CameraView: View {
                 }
             }) {
                 Text("Open Settings")
-                    .font(.headline)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 14)
-                    .background(Color.white)
-                    .clipShape(Capsule())
+                .font(.headline)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 32)
+                .padding(.vertical, 14)
+                .background(Color.white)
+                .clipShape(Capsule())
             }
         }
     }
     
-    // MARK: - Computed properties for layout
+    // MARK: - Computed properties
     private var hasVoiceNote: Bool {
         audioRecorder.recordedURL != nil || audioRecorder.isRecording
     }
     
-    private var controlsHeight: CGFloat {
-        if cameraState == .preview {
-            return 90
-        } else {
-            return hasVoiceNote ? 200 : 160
-        }
-    }
-    
     private var cardSpacing: CGFloat {
-        cameraState == .preview ? 56 : 20
+        cameraState == .preview ? 20 : 20
     }
     
     // MARK: - Main Content Area
-    private var mainContentArea: some View {
-        GeometryReader { geometry in
-            let availableHeight = geometry.size.height
-            let tabBarSpace: CGFloat = 70
-            let topSpace: CGFloat = 8
-            let cardHeight = availableHeight - controlsHeight - tabBarSpace - topSpace
-            let cardWidth = geometry.size.width - CardDimensions.horizontalPadding
-            
-            VStack(spacing: cardSpacing) {
-                // Image/Camera frame
-                if cameraState == .preview {
-                    cameraPreviewFrame(width: cardWidth, height: cardHeight)
-                } else {
-                    capturedPhotoFrame(width: cardWidth, height: cardHeight)
-                }
-                
-                // Controls
-                if cameraState == .preview {
-                    captureControls
-                } else {
-                    postCaptureControls
-                }
-                
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
+    private func mainContentArea(safeAreaBottom: CGFloat) -> some View {
+        return VStack { } // Placeholder not needed if we refactored Body. 
+        // Wait, "mainContentArea" is NOT called in my NEW body refactor!
+        // IN STEP 1010 REFACTOR:
+        /*
+        VStack(spacing: 0) {
+                    // Top Spacer...
+                    Spacer().frame(height: topSpacing)
+                    
+                    // Main content area (Camera or Photo)
+                    VStack(spacing: cardSpacing) { ... }
         }
+        */
+        // I INLINED mainContentArea logic into body!
+        // So I don't need to restore mainContentArea function if I removed the call.
+        // BUT WAIT.
+        // Did I remove the call?
+        // Let's check the body I wrote in step 1010.
+        // Yes, I wrote the content explicitly inside body.
+        
+        // HOWEVER, "cameraPreviewFrame" and "capturedPhotoFrame" use "cardSpacing".
+        // "cardSpacing" IS MISSING.
+        // "permissionDeniedView" IS MISSING (referenced in body).
+        
+        // So I need to restore "permissionDeniedView", "hasVoiceNote", "cardSpacing".
+        // I DO NOT need "mainContentArea" because I inlined it.
     }
     
-    // MARK: - Top Bar
-    private var topBar: some View {
-        HStack {
-            if cameraState == .captured {
-                // "Send to..." text
-                Text("Send to...")
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.7))
-                
-                Spacer()
-                
-                // Download/Save button
-                Button(action: { saveToPhotos() }) {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .padding(8)
-                }
-            } else {
-                // Live Photo toggle
-                if cameraManager.isLivePhotoSupported {
-                    Button(action: { cameraManager.toggleLivePhoto() }) {
-                        Image(systemName: cameraManager.isLivePhotoEnabled ? "livephoto" : "livephoto.slash")
-                            .font(.title2)
-                            .foregroundStyle(cameraManager.isLivePhotoEnabled ? .yellow : .white)
-                            .padding(12)
-                            .background(Circle().fill(Color.gray.opacity(0.4)))
-                    }
-                }
-                
-                Spacer()
-                
-                // Flash toggle
-                Button(action: { cameraManager.toggleFlash() }) {
-                    Image(systemName: cameraManager.isFlashOn ? "bolt.fill" : "bolt.slash")
-                        .font(.title2)
-                        .foregroundStyle(cameraManager.isFlashOn ? .yellow : .white)
-                        .padding(12)
-                        .background(Circle().fill(Color.gray.opacity(0.4)))
-                }
-                
-                // Flip camera
-                Button(action: { cameraManager.toggleCamera() }) {
-                    Image(systemName: "arrow.triangle.2.circlepath.camera")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .padding(12)
-                        .background(Circle().fill(Color.gray.opacity(0.4)))
-                }
-            }
-        }
-    }
+    // Redoing the replacement to just add the missing properties/views.
+    private let goldenOrange = Color(red: 1.0, green: 0.75, blue: 0.0) // Cam Vàng (Amber)
+    private let cornerRadius: CGFloat = CardDimensions.cornerRadius
+    
+    // Top Bar is now handled by HomeView (Global Header)
     
     // MARK: - Camera Preview Frame (State: preview)
     private func cameraPreviewFrame(width: CGFloat, height: CGFloat) -> some View {
@@ -259,439 +237,269 @@ struct CameraView: View {
             if cameraManager.permissionGranted {
                 CameraPreviewView(session: cameraManager.session)
                     .frame(width: width, height: height)
-                    .clipShape(RoundedRectangle(cornerRadius: CardDimensions.cornerRadius))
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                    .background(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(Color.black.opacity(0.05))
+                    )
                     .onAppear {
                         cameraManager.startSession()
                     }
+                    .overlay(alignment: .top) {
+                        // In-Preview Controls (Flash, Zoom)
+                        HStack {
+                            // Flash Button (Top Left)
+                            Button(action: { cameraManager.toggleFlash() }) {
+                                Circle()
+                                    .fill(Color.black.opacity(0.4))
+                                    .frame(width: 40, height: 40)
+                                    .overlay {
+                                        Image(systemName: cameraManager.isFlashOn ? "bolt.fill" : "bolt.slash.fill")
+                                            .foregroundStyle(cameraManager.isFlashOn ? goldenOrange : .white)
+                                            .font(.system(size: 18))
+                                    }
+                            }
+                            
+                            Spacer()
+                            
+                            // Zoom Button (Top Right)
+                            Button(action: {
+                                // Toggle zoom mock
+                                withAnimation {
+                                    zoomLevel = zoomLevel == 1.0 ? 2.0 : 1.0
+                                    cameraManager.setZoom(level: zoomLevel)
+                                }
+                            }) {
+                                Circle()
+                                    .fill(Color(red: 0.7, green: 0.6, blue: 0.4).opacity(0.8)) // Goldish brown bg
+                                    .frame(width: 40, height: 40)
+                                    .overlay {
+                                        Text("\(Int(zoomLevel))x")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(.white)
+                                    }
+                            }
+                        }
+                        .padding(20)
+                    }
             } else {
-                // Placeholder when no permission
-                RoundedRectangle(cornerRadius: CardDimensions.cornerRadius)
-                    .fill(Color.gray.opacity(0.3))
+                // Placeholder - same size and shape as PostCardView
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(0.05))
                     .frame(width: width, height: height)
                     .overlay {
-                        VStack(spacing: 16) {
-                            Image(systemName: "camera.viewfinder")
-                                .font(.system(size: 60))
-                                .foregroundStyle(.white.opacity(0.5))
-                            
-                            Text("Camera Preview")
-                                .font(.headline)
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
+                         Text("Camera Preview")
+                            .foregroundStyle(.gray)
                     }
             }
-            
-            // Border overlay
-            RoundedRectangle(cornerRadius: CardDimensions.cornerRadius)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                .frame(width: width, height: height)
         }
     }
     
     // MARK: - Captured Photo Frame (State: captured)
     private func capturedPhotoFrame(width: CGFloat, height: CGFloat) -> some View {
         ZStack {
-            // Always show captured image as base layer
             if let image = cameraManager.capturedImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
                     .frame(width: width, height: height)
-                    .clipShape(RoundedRectangle(cornerRadius: CardDimensions.cornerRadius))
-            } else {
-                // Fallback placeholder
-                RoundedRectangle(cornerRadius: CardDimensions.cornerRadius)
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: width, height: height)
-                    .overlay {
-                        Image(systemName: "photo.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.white.opacity(0.5))
-                    }
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
             
-            // Show video when playing Live Photo
+            // Live Photo Player
             if let movieURL = cameraManager.livePhotoMovieURL, isPlayingLivePhoto {
                 LivePhotoVideoPlayer(videoURL: movieURL, isPlaying: $isPlayingLivePhoto)
                     .frame(width: width, height: height)
-                    .clipShape(RoundedRectangle(cornerRadius: CardDimensions.cornerRadius))
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
             
-            // Gesture area for Live Photo playback
-            if cameraManager.livePhotoMovieURL != nil {
-                Color.clear
-                    .frame(width: width, height: height)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                if !isPlayingLivePhoto {
-                                    print("👆 Press detected - starting video playback")
-                                    isPlayingLivePhoto = true
-                                }
-                            }
-                            .onEnded { _ in
-                                print("👆 Release detected - stopping video playback")
-                                isPlayingLivePhoto = false
-                            }
-                    )
-            }
-            
-            // Border overlay
-            RoundedRectangle(cornerRadius: CardDimensions.cornerRadius)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                .frame(width: width, height: height)
-            
-            // Live Photo badge with hint (show when we have movie URL)
+            // Live Photo Badge
             if cameraManager.livePhotoMovieURL != nil {
                 VStack {
                     HStack {
                         HStack(spacing: 4) {
-                            Image(systemName: isPlayingLivePhoto ? "livephoto" : "livephoto")
-                                .font(.caption.weight(.bold))
-                            Text(isPlayingLivePhoto ? "LIVE" : "Hold to view")
-                                .font(.caption.weight(.bold))
+                            Image(systemName: "livephoto")
+                                .font(.system(size: 12, weight: .bold))
+                            Text(isPlayingLivePhoto ? "LIVE" : "Hold")
+                                .font(.system(size: 12, weight: .bold))
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(isPlayingLivePhoto ? Color.yellow.opacity(0.8) : Color.black.opacity(0.6)))
+                        .background(Capsule().fill(isPlayingLivePhoto ? goldenOrange : Color.black.opacity(0.6)))
                         .padding(16)
-                        
                         Spacer()
                     }
                     Spacer()
                 }
-                .frame(width: width, height: height)
                 .allowsHitTesting(false)
             }
             
-            // Message input overlay (only when not playing)
+            // Message Input
             if !isPlayingLivePhoto {
                 VStack {
                     Spacer()
-                    
                     messageInputOverlay
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
                 }
-                .frame(width: width, height: height)
             }
         }
+        .frame(width: width, height: height)
+        // Add press to play
+        .simultaneousGesture(
+             DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                     if cameraManager.livePhotoMovieURL != nil && !isPlayingLivePhoto {
+                         isPlayingLivePhoto = true
+                     }
+                }
+                .onEnded { _ in
+                     isPlayingLivePhoto = false
+                }
+        )
     }
     
     // MARK: - Message Input Overlay
     private var messageInputOverlay: some View {
         HStack {
             TextField("Add a message", text: $messageText)
-                .font(.subheadline)
-                .foregroundStyle(.white)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.black)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(Color.gray.opacity(0.6))
+                        .fill(Color.black.opacity(0.06))
+                        .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
                 )
         }
     }
     
-    // MARK: - Capture Controls (State: preview)
+    // MARK: - Capture Controls (Bottom)
     private var captureControls: some View {
-        HStack(alignment: .center, spacing: 40) {
-                // Gallery button - PhotosPicker
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    Circle()
-                        .fill(Color.gray.opacity(0.4))
-                        .frame(width: 56, height: 56)
-                        .overlay {
-                            Image(systemName: "photo.on.rectangle")
-                                .font(.title2)
-                                .foregroundStyle(.white)
-                        }
-                }
-                
-                // Capture button with Live Photo indicator
-                Button(action: { capturePhoto() }) {
-                    ZStack {
-                        // Outer ring - yellow when Live Photo enabled
-                        Circle()
-                            .stroke(cameraManager.isLivePhotoEnabled && cameraManager.isLivePhotoSupported ? Color.yellow : .white, lineWidth: 5)
-                            .frame(width: 80, height: 80)
-                        
-                        // Inner circle
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 66, height: 66)
-                        
-                        // Live Photo capturing indicator
-                        if cameraManager.isCapturingLivePhoto {
-                            Circle()
-                                .stroke(Color.yellow, lineWidth: 3)
-                                .frame(width: 90, height: 90)
-                                .opacity(0.8)
-                        }
-                    }
-                }
-                .disabled(cameraManager.isCapturingLivePhoto)
-                
-                // Effects button
-                Button(action: {}) {
-                    Circle()
-                        .fill(Color.gray.opacity(0.4))
-                        .frame(width: 56, height: 56)
-                        .overlay {
-                            Image(systemName: "sparkles")
-                                .font(.title2)
-                                .foregroundStyle(.white)
-                        }
-                }
-            }
-    }
-    
-    // MARK: - Post Capture Controls (State: captured)
-    private var postCaptureControls: some View {
-        VStack(spacing: 12) {
-            // Voice recording indicator / playback controls
-            if audioRecorder.recordedURL != nil || audioRecorder.isRecording {
-                voiceNoteControls
+        HStack(alignment: .center, spacing: 60) {
+            // Gallery (Left)
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.black.opacity(0.7))
             }
             
-            // Main action buttons row
-            HStack(alignment: .center, spacing: 16) {
-                // Cancel button with label inside
-                Button(action: { cancelCapture() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "xmark")
-                            .font(.footnote.weight(.semibold))
-                        Text("Cancel")
-                            .font(.footnote.weight(.semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Color.gray.opacity(0.4)))
-                }
-                
-                // Send/Save button (main action) - opens chapter picker
-                Button(action: { showChapterPicker = true }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.gray.opacity(0.4))
-                            .frame(width: 64, height: 64)
-                        
-                        if isSaving {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Image(systemName: "paperplane.fill")
-                                .font(.title3)
-                                .foregroundStyle(.white)
-                                .rotationEffect(.degrees(-45))
-                        }
-                    }
-                }
-                .disabled(isSaving)
-                
-                // Voice record button with label inside
-                Button(action: { audioRecorder.toggleRecording() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: audioRecorder.isRecording ? "stop.fill" : "mic.fill")
-                            .font(.footnote.weight(.semibold))
-                        Text(audioRecorder.isRecording ? "Stop" : "Record")
-                            .font(.footnote.weight(.semibold))
-                    }
-                    .foregroundStyle(audioRecorder.isRecording ? .red : .white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(audioRecorder.isRecording ? Color.red.opacity(0.3) : Color.gray.opacity(0.4)))
+            // Shutter Button (Center)
+            Button(action: { capturePhoto() }) {
+                ZStack {
+                    // Outer Ring
+                    Circle()
+                        .stroke(goldenOrange, lineWidth: 3)
+                        .frame(width: 80, height: 80)
+                    
+                    // Inner Circle
+                    Circle()
+                        .fill(goldenOrange.opacity(0.15))
+                        .frame(width: 70, height: 70)
                 }
             }
+            .disabled(cameraManager.isCapturingLivePhoto)
             
-            // Chapter selection row
-            chapterSelectionRow
+            // Flip Camera (Right)
+            Button(action: { cameraManager.toggleCamera() }) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.black.opacity(0.7))
+            }
         }
     }
     
+    // MARK: - Post Capture Controls (Bottom)
+    private var postCaptureControls: some View {
+        VStack(spacing: 20) {
+             // Voice Note Controls if active
+             if audioRecorder.recordedURL != nil || audioRecorder.isRecording {
+                 voiceNoteControls
+             }
+             
+             // Action Row: Cancel | Send | Voice
+             HStack(spacing: 40) {
+                 // Cancel
+                 Button(action: { cancelCapture() }) {
+                     Image(systemName: "xmark")
+                         .font(.system(size: 24, weight: .medium))
+                         .foregroundStyle(.black.opacity(0.7))
+                         .frame(width: 50, height: 50)
+                         .background(Circle().fill(Color.black.opacity(0.08)))
+                 }
+                 
+                 // Send Button
+                 Button(action: { showChapterPicker = true }) {
+                     ZStack {
+                         Circle()
+                             .fill(goldenOrange)
+                             .frame(width: 70, height: 70)
+                         
+                         if isSaving {
+                             ProgressView().tint(.white)
+                         } else {
+                             Image(systemName: "paperplane.fill")
+                                 .font(.system(size: 28))
+                                 .foregroundStyle(.white)
+                                 .offset(x: -2, y: 2)
+                         }
+                     }
+                 }
+                 
+                 // Voice Record
+                 Button(action: { audioRecorder.toggleRecording() }) {
+                     Image(systemName: audioRecorder.isRecording ? "stop.fill" : "mic.fill")
+                         .font(.system(size: 24, weight: .medium))
+                         .foregroundStyle(audioRecorder.isRecording ? .white : .black.opacity(0.7))
+                         .frame(width: 50, height: 50)
+                         .background(Circle().fill(audioRecorder.isRecording ? Color.red.opacity(0.8) : Color.black.opacity(0.08)))
+                 }
+             }
+        }
+    }
+
     // MARK: - Voice Note Controls
     private var voiceNoteControls: some View {
-        HStack(spacing: 10) {
-            // Recording indicator or playback button
+        HStack {
             if audioRecorder.isRecording {
-                // Recording animation - compact
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                    
-                    Text(audioRecorder.formatDuration(audioRecorder.recordingDuration))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.red)
-                        .monospacedDigit()
-                }
-                .frame(maxWidth: .infinity)
-            } else if audioRecorder.recordedURL != nil {
-                // Playback controls - compact
-                HStack(spacing: 8) {
-                    // Play/Pause button
-                    Button(action: { audioRecorder.togglePlayback() }) {
-                        Image(systemName: audioRecorder.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.footnote)
-                            .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.gray.opacity(0.5)))
-                    }
-                    
-                    // Progress bar
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.2))
-                                .frame(height: 3)
-                            
-                            Capsule()
-                                .fill(Color.white)
-                                .frame(width: geometry.size.width * audioRecorder.playbackProgress, height: 3)
-                        }
-                        .frame(height: geometry.size.height)
-                    }
-                    .frame(height: 28)
-                    
-                    // Duration
-                    Text(audioRecorder.formatDuration(audioRecorder.recordingDuration))
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .monospacedDigit()
-                    
-                    // Delete button
-                    Button(action: { audioRecorder.deleteRecording() }) {
-                        Image(systemName: "xmark")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                            .frame(width: 24, height: 24)
-                            .background(Circle().fill(Color.gray.opacity(0.4)))
-                    }
-                }
+                 Text("Recording... \(audioRecorder.formatDuration(audioRecorder.recordingDuration))")
+                     .foregroundStyle(.red)
+            } else {
+                 Button(action: { audioRecorder.togglePlayback() }) {
+                     Image(systemName: audioRecorder.isPlaying ? "pause.fill" : "play.fill")
+                 }
+                 Text(audioRecorder.formatDuration(audioRecorder.recordingDuration))
+                 
+                 Spacer()
+                 
+                 Button(action: { audioRecorder.deleteRecording() }) {
+                     Image(systemName: "trash")
+                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            Capsule()
-                .fill(Color.gray.opacity(0.3))
-        )
+        .padding()
+        .background(Capsule().fill(Color.white))
         .padding(.horizontal, 40)
-        .padding(.vertical, 10)
     }
     
-    // MARK: - Chapter Selection Row
-    private var chapterSelectionRow: some View {
-        let itemWidth: CGFloat = 56 // Width of each chapter button - smaller
-        let spacing: CGFloat = 12
-        
-        return GeometryReader { geometry in
-            let screenWidth = geometry.size.width
-            let sidePadding = (screenWidth - itemWidth) / 2
-            
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: spacing) {
-                        ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
-                            chapterButton(chapter: chapter, index: index)
-                                .frame(width: itemWidth)
-                                .id(index)
-                        }
-                    }
-                    .padding(.leading, sidePadding)
-                    .padding(.trailing, sidePadding)
-                }
-                .onChange(of: selectedChapterIndex) { _, newValue in
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        proxy.scrollTo(newValue, anchor: .center)
-                    }
-                }
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        proxy.scrollTo(selectedChapterIndex, anchor: .center)
-                    }
-                }
-            }
-        }
-        .frame(height: 64)
-    }
-    
-    private func chapterButton(chapter: ChapterPreview, index: Int) -> some View {
-        let isSelected = selectedChapterIndex == index
-        
-        return Button(action: { selectedChapterIndex = index }) {
-            VStack(spacing: 4) {
-                ZStack {
-                    Circle()
-                        .stroke(
-                            isSelected ? Color.yellow : Color.white.opacity(0.3),
-                            lineWidth: isSelected ? 2 : 1
-                        )
-                        .frame(width: 44, height: 44)
-                    
-                    if let icon = chapter.icon {
-                        if chapter.isNew {
-                            Image(systemName: icon)
-                                .font(.body)
-                                .foregroundStyle(.white.opacity(0.7))
-                        } else {
-                            Image(systemName: icon)
-                                .font(.subheadline)
-                                .foregroundStyle(isSelected ? .yellow : .white)
-                        }
-                    } else {
-                        // Chapter thumbnail placeholder
-                        Circle()
-                            .fill(Color.gray.opacity(0.4))
-                            .frame(width: 40, height: 40)
-                            .overlay {
-                                Image(systemName: "photo")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    }
-                }
-                
-                Text(chapter.name)
-                    .font(.system(size: 10))
-                    .foregroundStyle(isSelected ? .yellow : .white.opacity(0.7))
-            }
-        }
-    }
-    
-    // MARK: - Actions
-    private func capturePhoto() {
-        cameraManager.capturePhoto()
-    }
+    // MARK: - Actions (Helper methods)
+    private func capturePhoto() { cameraManager.capturePhoto() }
     
     private func cancelCapture() {
-        // Stop and clear audio recording
         audioRecorder.deleteRecording()
-        
-        // Clear camera data
         cameraManager.clearCapturedImage()
         messageText = ""
         isPlayingLivePhoto = false
         selectedPhotoItem = nil
-        
-        // Then switch state (will trigger camera restart via onChange)
-        withAnimation(.easeInOut(duration: 0.2)) {
-            cameraState = .preview
-        }
+        withAnimation { cameraState = .preview }
     }
     
     private func saveToChapter(_ chapter: Chapter? = nil) {
         guard let image = cameraManager.capturedImage,
-              let imageData = image.jpegData(compressionQuality: 0.8) else {
-            print("❌ No image to save")
-            return
-        }
-        
+              let imageData = image.jpegData(compressionQuality: 0.8) else { return }
         isSaving = true
-        
         Task {
             do {
                 _ = try await PostService.shared.savePost(
@@ -703,46 +511,16 @@ struct CameraView: View {
                     chapter: chapter,
                     modelContext: modelContext
                 )
-                
-                if let chapter = chapter {
-                    print("✅ Saved to chapter: \(chapter.name)")
-                } else {
-                    print("✅ Saved as single post")
-                }
-                
-                // Post notification to refresh Home feed
                 NotificationCenter.default.post(name: .newPostSaved, object: nil)
-                
-                // Clear and go back to preview
                 cancelCapture()
-                
             } catch {
-                print("❌ Failed to save post: \(error)")
+                print("Error saving: \(error)")
             }
-            
             isSaving = false
         }
     }
-    
-    private func saveToPhotos() {
-        guard cameraManager.capturedImage != nil else { return }
-        
-        // Check if it's a Live Photo
-        if cameraManager.livePhotoMovieURL != nil {
-            cameraManager.saveLivePhotoToLibrary { success in
-                if success {
-                    showSavedAlert = true
-                }
-            }
-        } else {
-            cameraManager.saveToPhotos(cameraManager.capturedImage!) { success in
-                if success {
-                    showSavedAlert = true
-                }
-            }
-        }
-    }
 }
+
 
 // MARK: - Chapter Preview Model
 struct ChapterPreview: Identifiable {

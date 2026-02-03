@@ -3,7 +3,7 @@
 //  Cira-
 //
 //  Main TabView with Liquid Glass effect
-//  Tabs: Home, Camera, My Story + AI Voice Chat button
+//  Tabs: Home, My Story + AI Voice Chat button
 //
 
 import SwiftUI
@@ -14,14 +14,12 @@ struct ContentView: View {
     
     enum Tab: Int, CaseIterable {
         case home = 0
-        case camera = 1
         case myStory = 2
         case ai = 3
         
         var title: String {
             switch self {
             case .home: return "Home"
-            case .camera: return "Camera"
             case .myStory: return "My Story"
             case .ai: return "AI"
             }
@@ -30,7 +28,6 @@ struct ContentView: View {
         var icon: String {
             switch self {
             case .home: return "house.fill"
-            case .camera: return "camera.fill"
             case .myStory: return "book.fill"
             case .ai: return "waveform.circle.fill"
             }
@@ -40,17 +37,12 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
+                // Home now contains both Camera and Feed
                 HomeView()
                     .tabItem {
                         Label(Tab.home.title, systemImage: Tab.home.icon)
                     }
                     .tag(Tab.home)
-                
-                CameraView()
-                    .tabItem {
-                        Label(Tab.camera.title, systemImage: Tab.camera.icon)
-                    }
-                    .tag(Tab.camera)
                 
                 MyStoryView()
                     .tabItem {

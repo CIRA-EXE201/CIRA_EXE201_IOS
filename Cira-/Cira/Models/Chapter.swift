@@ -17,6 +17,13 @@ final class Chapter {
     var createdAt: Date
     var updatedAt: Date
     
+    // Sync status
+    var syncStatusRaw: String = SyncStatus.pending.rawValue
+    var syncStatus: SyncStatus {
+        get { SyncStatus(rawValue: syncStatusRaw) ?? .pending }
+        set { syncStatusRaw = newValue.rawValue }
+    }
+    
     @Relationship(deleteRule: .nullify)
     var photos: [Photo] = []
     
@@ -45,5 +52,6 @@ final class Chapter {
         self.descriptionText = description
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.syncStatusRaw = SyncStatus.pending.rawValue
     }
 }

@@ -233,7 +233,13 @@ struct ChapterDetailView: View {
     // MARK: - Full Screen Card Area (copied from HomeView)
     private var fullScreenCardArea: some View {
         GeometryReader { geometry in
-            let cardDimensions = CardDimensions.calculate(geometry: geometry, includeVoiceBar: true, compact: true)
+            // Use standardized calculation
+            let cardSize = CardDimensions.calculateMainCardSize(screenSize: geometry.size, safeArea: geometry.safeAreaInsets)
+            
+            // Adjust card dimensions directly from calculation
+            let cardWidth = cardSize.width
+            let cardHeight = cardSize.height
+            
             let postAreaHeight = geometry.size.height
             let cardTopOffset: CGFloat = 0
             
@@ -244,7 +250,7 @@ struct ChapterDetailView: View {
                     
                     if shouldShow {
                         VStack(spacing: 16) {
-                            PostCardView(post: post, cardWidth: cardDimensions.width, cardHeight: cardDimensions.height)
+                            PostCardView(post: post, cardWidth: cardWidth, cardHeight: cardHeight, safeAreaTop: geometry.safeAreaInsets.top)
                             
                             // Voice waveform bar for this post
                             if post.photos.first?.hasVoice == true {

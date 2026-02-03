@@ -28,6 +28,9 @@ final class Photo {
     // Store as String for SwiftData compatibility
     var syncStatusRaw: String = SyncStatus.pending.rawValue
     
+    // Post visibility (private, friends, family, public)
+    var visibilityRaw: String = PostVisibility.friends.rawValue
+    
     @Relationship(deleteRule: .cascade)
     var voiceNote: VoiceNote?
     
@@ -38,6 +41,12 @@ final class Photo {
     var syncStatus: SyncStatus {
         get { SyncStatus(rawValue: syncStatusRaw) ?? .pending }
         set { syncStatusRaw = newValue.rawValue }
+    }
+    
+    // Computed property for visibility enum access
+    var visibility: PostVisibility {
+        get { PostVisibility(rawValue: visibilityRaw) ?? .friends }
+        set { visibilityRaw = newValue.rawValue }
     }
     
     // Computed properties

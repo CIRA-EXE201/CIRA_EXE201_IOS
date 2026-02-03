@@ -56,11 +56,29 @@ struct FriendWall: Identifiable {
 @MainActor
 final class HomeViewModel: ObservableObject {
     // MARK: - Published Properties
-    @Published private(set) var posts: [Post] = []
+    @Published private(set) var posts: [Post] = []          // Local SwiftData posts (yours)
+    @Published private(set) var feedPosts: [Post] = []      // Social feed from friends/family
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var familyWalls: [FriendWall] = []
     @Published private(set) var friendWalls: [FriendWall] = []
+    
+    // Combined feed (local + social, sorted by date)
+    var combinedPosts: [Post] {
+        // Merge local posts with social feed posts
+        var allPosts = posts + feedPosts
+        
+        // Remove duplicates (keep first occurrence by ID)
+        var seenIDs = Set<UUID>()
+        allPosts = allPosts.filter { post in
+            if seenIDs.contains(post.id) { return false }
+            seenIDs.insert(post.id)
+            return true
+        }
+        
+        // Sort by date (newest first)
+        return allPosts.sorted { $0.createdAt > $1.createdAt }
+    }
     
     private var modelContext: ModelContext?
     
@@ -74,12 +92,25 @@ final class HomeViewModel: ObservableObject {
         // Configure SyncManager with model context
         SyncManager.shared.configure(modelContext: modelContext)
         
-        // Load local posts
-        loadPosts()
+        // Configure RealtimeManager for real-time sync
+        RealtimeManager.shared.configure(modelContext: modelContext)
         
-        // Trigger pending sync in background
+        // Load local posts first (instant)
+        loadLocalPosts()
+        
+        // Then load everything from network
         Task {
-            await SyncManager.shared.syncPendingPosts()
+            // Sync local data with Supabase
+            await SyncManager.shared.performFullSync()
+            
+            // Reload local data after sync
+            loadLocalPosts()
+            
+            // Load social feed from friends/family
+            await loadSocialFeed()
+            
+            // Start listening to realtime changes
+            await RealtimeManager.shared.startListening()
         }
         
         // Load friends and families from Supabase
@@ -92,13 +123,23 @@ final class HomeViewModel: ObservableObject {
     func refresh() async {
         isLoading = true
         
-        loadPosts()
+        // Perform full sync (upload + download)
+        await SyncManager.shared.performFullSync()
+        
+        // Reload local data
+        loadLocalPosts()
+        
+        // Reload social feed
+        await loadSocialFeed()
+        
+        // Reload friends/families
         await loadFriendsAndFamilies()
         
         isLoading = false
     }
     
-    func loadPosts() {
+    // MARK: - Load Local Posts from SwiftData
+    func loadLocalPosts() {
         guard let modelContext = modelContext else {
             posts = Post.mockPosts
             return
@@ -109,7 +150,43 @@ final class HomeViewModel: ObservableObject {
             PostService.shared.convertToPost(photo: photo)
         }
         
-        posts = allPosts
+        // Remove duplicates by ID (keep first occurrence)
+        var seenIDs = Set<UUID>()
+        let uniquePosts = allPosts.filter { post in
+            if seenIDs.contains(post.id) {
+                return false
+            }
+            seenIDs.insert(post.id)
+            return true
+        }
+        
+        posts = uniquePosts
+    }
+    
+    // MARK: - Load Social Feed from Friends/Family
+    func loadSocialFeed() async {
+        do {
+            let socialFeed = try await FeedService.shared.fetchSimpleFeed(limit: 50)
+            
+            // Convert FeedPost to Post for display
+            let displayPosts = socialFeed.map { feedPost in
+                FeedService.shared.convertToDisplayPost(feedPost: feedPost)
+            }
+            
+            feedPosts = displayPosts
+            print("✅ Loaded \(feedPosts.count) posts from social feed")
+        } catch {
+            print("❌ Failed to load social feed: \(error)")
+            errorMessage = "Failed to load feed: \(error.localizedDescription)"
+        }
+    }
+    
+    // Backward compatibility - loadPosts calls both
+    func loadPosts() {
+        loadLocalPosts()
+        Task {
+            await loadSocialFeed()
+        }
     }
     
     // MARK: - Load Friends & Families from Supabase
