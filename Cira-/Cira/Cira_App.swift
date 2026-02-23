@@ -44,9 +44,9 @@ struct Cira_App: App {
                                 // Ensure authenticated
                                 if SupabaseManager.shared.isAuthenticated,
                                    let uuid = UUID(uuidString: inviterId) {
-                                    // Send friend request automatically
-                                    try await FriendService.shared.sendFriendRequest(to: uuid)
-                                    print("✅ Auto-sent friend request to \(inviterId)")
+                                    // Receiver (the person clicking the link) gets the request from the sender (inviterId)
+                                    try await FriendService.shared.receiveFriendRequest(from: uuid)
+                                    print("✅ Automatically received friend request from \(inviterId)")
                                 }
                             } catch {
                                 print("❌ Failed to process invite: \(error)")

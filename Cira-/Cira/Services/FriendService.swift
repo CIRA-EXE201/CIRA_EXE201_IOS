@@ -55,6 +55,27 @@ final class FriendService {
             .execute()
     }
     
+    // MARK: - Receive Friend Request (from deep link)
+    func receiveFriendRequest(from requesterId: UUID) async throws {
+        guard let myId = currentUserId else {
+            throw FriendError.notAuthenticated
+        }
+        
+        // Ensure we don't add ourselves
+        guard myId != requesterId else { return }
+        
+        let data: [String: String] = [
+            "requester_id": requesterId.uuidString,
+            "addressee_id": myId.uuidString,
+            "status": "pending"
+        ]
+        
+        try await client
+            .from("friendships")
+            .insert(data)
+            .execute()
+    }
+    
     // MARK: - Accept Friend Request
     func acceptFriendRequest(_ friendshipId: UUID) async throws {
         try await client

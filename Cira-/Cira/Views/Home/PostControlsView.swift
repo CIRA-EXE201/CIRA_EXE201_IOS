@@ -1,5 +1,6 @@
 import SwiftUI
 import OSLog
+import Auth
 
 private let logger = Logger(subsystem: "tutu.Cira-", category: "LikeDebug")
 
@@ -8,6 +9,7 @@ struct PostControlsView: View {
     let onLikeToggle: (UUID) -> Void
     
     @State private var isShowingComments = false
+    @State private var isShowingSendMessage = false
     @State private var isLiked: Bool
     @State private var likeCount: Int
     @State private var commentCount: Int
@@ -20,6 +22,14 @@ struct PostControlsView: View {
         _likeCount = State(initialValue: post.likeCount)
         _commentCount = State(initialValue: post.commentCount)
         logger.debug("Init called for \(post.id.uuidString). isLiked: \(post.isLiked)")
+    }
+    
+    private var isMyPost: Bool {
+        guard let currentUserStr = SupabaseManager.shared.currentUser?.id.uuidString,
+              let currentUserId = UUID(uuidString: currentUserStr) else {
+            return false
+        }
+        return post.author.id == currentUserId
     }
     
     var body: some View {
@@ -49,56 +59,62 @@ struct PostControlsView: View {
                 Spacer()
             }
             
-            // Interaction Bar (Input + Icons)
-            HStack(spacing: 12) {
-                // Message Input
-                Button(action: { isShowingComments = true }) {
-                    HStack {
-                        Text("Bình luận\(commentCount > 0 ? " (\(commentCount))" : "")...")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.black.opacity(0.5))
-                        Spacer()
+            
+            if !isMyPost {
+                // Interaction Bar (Input + Icons)
+                HStack(spacing: 12) {
+                    // Message Input
+                    Button(action: { isShowingSendMessage = true }) {
+                        HStack {
+                            Text("Gửi tin nhắn...")
+                                .font(.system(size: 15))
+                                .foregroundStyle(.black.opacity(0.5))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.06))
+                                .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                        )
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.06))
-                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
-                    )
-                }
-                .buttonStyle(.plain)
-                
-                // Reactions
-                HStack(spacing: 16) {
-                    Button(action: {
-                        toggleLike()
-                    }) {
-                        HStack(spacing: 4) {
-                            Text(isLiked ? "❤️" : "🤍") // Better heart emoji
-                                .font(.system(size: 24))
-                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                            
-                            if likeCount > 0 {
-                                Text("\(likeCount)")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.black.opacity(0.7))
+                    .buttonStyle(.plain)
+                    
+                    // Reactions
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            toggleLike()
+                        }) {
+                            HStack(spacing: 4) {
+                                Text(isLiked ? "❤️" : "🤍") // Better heart emoji
+                                    .font(.system(size: 24))
+                                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                
+                                if likeCount > 0 {
+                                    Text("\(likeCount)")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.black.opacity(0.7))
+                                }
                             }
                         }
-                    }
-                    .disabled(isLiking)
-                    
-                    Button(action: {
-                        isShowingComments = true
-                    }) {
-                        Image(systemName: "bubble.right")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.black.opacity(0.6))
+                        .disabled(isLiking)
+                        
+                        Button(action: {
+                            isShowingSendMessage = true
+                        }) {
+                            Image(systemName: "paperplane")
+                                .font(.system(size: 20))
+                                .foregroundStyle(.black.opacity(0.6))
+                        }
                     }
                 }
             }
         }
         .padding(.horizontal, 16)
+        .sheet(isPresented: $isShowingSendMessage) {
+            SendMessageSheet(post: post)
+        }
         .sheet(isPresented: $isShowingComments) {
             CommentSheet(postId: post.photos.first?.id ?? post.id) // Fallback for id mapping
         }

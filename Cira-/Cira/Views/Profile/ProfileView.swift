@@ -36,6 +36,7 @@ struct ProfileView: View {
     // Profile data from Supabase
     @State private var profileData: ProfileData?
     @State private var isLoading = true
+    @State private var showAddFriends = false
     
     // MARK: - Calendar Data
     // Key: "MM-dd" -> Array of thumbnail data (max 2 items)
@@ -102,6 +103,9 @@ struct ProfileView: View {
                 .presentationDetents([.height(600)])
                 .presentationDragIndicator(.hidden)
                 .presentationCornerRadius(32)
+        }
+        .sheet(isPresented: $showAddFriends) {
+            AddFriendsView()
         }
         .onAppear {
             fetchProfile()
@@ -320,6 +324,15 @@ struct ProfileView: View {
                             }
                             .transition(.scale.combined(with: .opacity))
                     }
+                }
+                
+                // Add Friends Button
+                Button(action: { showAddFriends = true }) {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 
                 // Back button (now on right)

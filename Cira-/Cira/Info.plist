@@ -12,6 +12,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.565368166999-c8mpppcpess1k115s219njn4mfslf3mb</string>
+				<string>cira</string>
 			</array>
 		</dict>
 
