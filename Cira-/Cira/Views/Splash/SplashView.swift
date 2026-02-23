@@ -9,6 +9,7 @@ import SwiftUI
 import Supabase
 
 enum AppDestination {
+    case loading
     case login
     case profileSetup
     case home
@@ -16,18 +17,55 @@ enum AppDestination {
 
 struct SplashView: View {
     @State private var isAnimating = false
-    @State private var destination: AppDestination = .login
+    @State private var destination: AppDestination = .loading
     @State private var isLoading = false
     @State private var errorMessage: String?
     
     var body: some View {
         switch destination {
+        case .loading:
+            loadingView
         case .login:
             loginView
         case .profileSetup:
             ProfileSetupView()
         case .home:
             ContentView()
+        }
+    }
+    
+    private var loadingView: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            
+            VStack(spacing: 32) {
+                Spacer()
+                
+                Image("Logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 180, height: 180)
+                    .scaleEffect(isAnimating ? 1.0 : 0.8)
+                    .opacity(isAnimating ? 1.0 : 0.0)
+                
+                Text("Preserve memories with your voice")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .opacity(isAnimating ? 1.0 : 0.0)
+                
+                Spacer()
+                
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                
+                Spacer().frame(height: 40)
+            }
+        }
+        .onAppear {
+            checkAuthState()
+            withAnimation(.easeOut(duration: 0.8)) {
+                isAnimating = true
+            }
         }
     }
     
@@ -98,9 +136,6 @@ struct SplashView: View {
             }
         }
         .onAppear {
-            // Check if already authenticated
-            checkAuthState()
-            
             // Animate logo appearance
             withAnimation(.easeOut(duration: 0.8)) {
                 isAnimating = true
@@ -113,6 +148,9 @@ struct SplashView: View {
             // Check for existing session
             guard SupabaseManager.shared.isAuthenticated,
                   let userId = SupabaseManager.shared.currentUser?.id else {
+                withAnimation {
+                    destination = .login
+                }
                 return
             }
             

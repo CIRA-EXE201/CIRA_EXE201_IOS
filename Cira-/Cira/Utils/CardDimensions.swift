@@ -2,32 +2,59 @@
 //  CardDimensions.swift
 //  Cira
 //
-//  Shared card dimensions calculation for consistency across views
-//
 
 import SwiftUI
 
-/// Helper to calculate card dimensions consistently across the app
 struct CardDimensions {
-    
     // MARK: - Constants
-    static let horizontalPadding: CGFloat = 32 // 16pt each side
-    static let cornerRadius: CGFloat = 40
+    static let cornerRadius: CGFloat = 36
+    static let navbarHeight: CGFloat = 60
+    static let tabbarHeight: CGFloat = 100
+    static let interactionHeight: CGFloat = 110
+    static let standardGap: CGFloat = 16
     
-    // Layout Constants matching CameraView
-    static let topSpace: CGFloat = 8
-    static let controlsHeight: CGFloat = 80 // Reduced slighly from 90 to fit better
-    static let extraBottomSpacing: CGFloat = 110 // Reduced from 130 to increase card height
+    // MARK: - Layout Calculations
     
-    // MARK: - Calculation
+    static func topAreaHeight(safeArea: EdgeInsets) -> CGFloat {
+        return safeArea.top + navbarHeight
+    }
+    
+    static func bottomAreaHeight(safeArea: EdgeInsets) -> CGFloat {
+        return safeArea.bottom + tabbarHeight
+    }
+    
+    /// Dịch toàn bộ khối nội dung (ảnh + controls) xuống dưới so với vị trí chính giữa
+    static let verticalShift: CGFloat = 36
+    
+    /// Height of the main card (e.g. 4:5 aspect ratio or optimized for screen)
+    static func calculateCardHeight(screenHeight: CGFloat, safeArea: EdgeInsets) -> CGFloat {
+        let top = topAreaHeight(safeArea: safeArea)
+        let bottom = bottomAreaHeight(safeArea: safeArea)
+        let available = screenHeight - top - bottom - standardGap - interactionHeight
+        
+        // We want the card to be as large as possible but not cramped. 
+        // 58% of screen is usually the sweet spot for the image area.
+        return min(screenHeight * 0.58, available)
+    }
+    
+    /// The spacer height needed at the top AND bottom of the content block to center it
+    static func calculateVerticalCenteringPadding(screenHeight: CGFloat, safeArea: EdgeInsets) -> CGFloat {
+        let cardH = calculateCardHeight(screenHeight: screenHeight, safeArea: safeArea)
+        let totalContentH = cardH + standardGap + interactionHeight
+        let availableH = screenHeight - topAreaHeight(safeArea: safeArea) - bottomAreaHeight(safeArea: safeArea)
+        
+        let centerPadding = max((availableH - totalContentH) / 2, 0)
+        return centerPadding + verticalShift
+    }
+    
+    // MARK: - Legacy Compatibility (To prevent build breakages)
+    
     static func calculateMainCardSize(screenSize: CGSize, safeArea: EdgeInsets) -> CGSize {
-        // Redesign: Return full screen size for immersive experience
-        return screenSize
+        let h = calculateCardHeight(screenHeight: screenSize.height, safeArea: safeArea)
+        return CGSize(width: screenSize.width, height: h)
     }
     
     static func topSpacing(safeArea: EdgeInsets) -> CGFloat {
-        let topBarPadding = safeArea.top > 0 ? safeArea.top : 44 // Removed +10
-        let topBarHeight: CGFloat = 44
-        return topBarPadding + topBarHeight + topSpace
+        return topAreaHeight(safeArea: safeArea)
     }
 }

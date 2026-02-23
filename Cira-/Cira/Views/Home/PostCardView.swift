@@ -19,7 +19,7 @@ struct PostCardView: View {
     @State private var isPlayingVoice = false
     
     // Corner radius constant
-    private let cornerRadius: CGFloat = 32
+    private let cornerRadius: CGFloat = 36
     
     // Current photo helper
     private var currentPhoto: Post.PhotoItem? {
@@ -44,16 +44,28 @@ struct PostCardView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Main Card with rounded corners - keeps full cardHeight
-            ZStack(alignment: .top) {
+            // Main Card with rounded corners
+            ZStack(alignment: .bottom) { // Changed to bottom to anchor voice bar overlay
                 // Background Image
                 imageLayer
                 
                 // Overlays (Progress bar, Live badge, Message)
                 overlayContent
+                
+                // Voice waveform bar - Overlayed AT THE BOTTOM of the card for alignment consistency
+                if let voiceNote = currentVoiceNote {
+                    VoiceOverlayBar(voiceNote: voiceNote, isPlaying: $isPlayingVoice)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                }
             }
             .frame(width: cardWidth, height: cardHeight)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(.white.opacity(0.4), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             // Long press for Live Photo
             .onLongPressGesture(minimumDuration: 0.5, pressing: { isPressing in
@@ -75,43 +87,55 @@ struct PostCardView: View {
                         }
                     }
             )
-            
-            // Voice waveform bar - below image
-            if let voiceNote = currentVoiceNote {
-                VoiceOverlayBar(voiceNote: voiceNote, isPlaying: $isPlayingVoice)
-                    .padding(.horizontal, 16)
-                    .padding(.top, Self.voiceBarSpacing)
-            }
         }
     }
     
     // MARK: - Image Layer
     @ViewBuilder
     private var imageLayer: some View {
-        if let photo = currentPhoto,
-           let imageData = photo.imageData,
-           let uiImage = UIImage(data: imageData) {
-            
-            Image(uiImage: uiImage)
-                .resizable()
-                .scaledToFill()
-                .frame(width: cardWidth, height: cardHeight)
-            
-            // Live Photo overlay
-            if let movieURL = photo.livePhotoMovieURL, isPlayingLivePhoto {
-                LivePhotoVideoPlayer(videoURL: movieURL, isPlaying: $isPlayingLivePhoto)
+        if let photo = currentPhoto {
+            if let imageData = photo.imageData, let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
                     .frame(width: cardWidth, height: cardHeight)
+                
+                // Live Photo overlay
+                if let movieURL = photo.livePhotoMovieURL, isPlayingLivePhoto {
+                    LivePhotoVideoPlayer(videoURL: movieURL, isPlaying: $isPlayingLivePhoto)
+                        .frame(width: cardWidth, height: cardHeight)
+                }
+            } else if let imageURL = photo.imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    if let image = phase.image {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: cardWidth, height: cardHeight)
+                    } else if phase.error != nil {
+                        placeholderLayer
+                    } else {
+                        Color.black.opacity(0.1)
+                            .frame(width: cardWidth, height: cardHeight)
+                            .overlay(ProgressView())
+                    }
+                }
+            } else {
+                placeholderLayer
             }
         } else {
-            // Placeholder
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color(white: 0.15))
-                .overlay {
-                    Image(systemName: "photo")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.white.opacity(0.3))
-                }
+            placeholderLayer
         }
+    }
+    
+    private var placeholderLayer: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color(white: 0.15))
+            .overlay {
+                Image(systemName: "photo")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.white.opacity(0.3))
+            }
     }
     
     // MARK: - Overlay Content
@@ -149,7 +173,7 @@ struct PostCardView: View {
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Color.black.opacity(0.5)))
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, hasVoice ? 80 : 16) // Push up if voice bar exists
             }
         }
     }
@@ -175,10 +199,11 @@ struct PostCardView: View {
         HStack(spacing: 4) {
             let count = post.photos.count
             ForEach(0..<count, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(index == currentPhotoIndex ? Color.white : Color.white.opacity(0.4))
-                    .frame(height: 12)
-                    .frame(maxWidth: .infinity) // Flexibly fill available space
+                Capsule()
+                    .fill(index == currentPhotoIndex ? Color.white : Color.white.opacity(0.3))
+                    .frame(height: 4)
+                    .frame(maxWidth: .infinity)
+                    .shadow(color: .black.opacity(0.1), radius: 2)
             }
         }
     }

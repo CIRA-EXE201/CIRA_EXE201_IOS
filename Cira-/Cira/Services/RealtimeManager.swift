@@ -85,13 +85,13 @@ final class RealtimeManager: ObservableObject {
     private func subscribeToPosts(userId: String) async {
         let client = SupabaseManager.shared.client
         
-        postsChannel = client.realtimeV2.channel("posts_\(userId)")
+        postsChannel = client.realtimeV2.channel("public_posts")
         
         let changes = postsChannel!.postgresChange(
             AnyAction.self,
             schema: "public",
-            table: "posts",
-            filter: "owner_id=eq.\(userId)"
+            table: "posts"
+            // No filter, so we receive updates for all posts in the feed
         )
         
         await postsChannel!.subscribe()
@@ -146,18 +146,27 @@ final class RealtimeManager: ObservableObject {
     private func handlePostChange(_ change: AnyAction) async {
         guard let modelContext = modelContext else { return }
         
-        print("📥 [Realtime] Post change received: \(change)")
-        
         do {
             switch change {
             case .insert(let action):
                 let data = try JSONEncoder().encode(action.record)
                 let dto = try JSONDecoder().decode(PostDTO.self, from: data)
-                await SyncManager.shared.downloadAndSaveFromRealtime(dto: dto)
                 
-            case .update:
-                // Handle post updates if needed
-                break
+                if dto.owner_id == SupabaseManager.shared.currentUser?.id.uuidString {
+                    await SyncManager.shared.downloadAndSaveFromRealtime(dto: dto)
+                }
+                
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .postInserted, object: dto)
+                }
+                
+            case .update(let action):
+                let data = try JSONEncoder().encode(action.record)
+                let dto = try JSONDecoder().decode(PostDTO.self, from: data)
+                
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .postUpdated, object: dto)
+                }
                 
             case .delete(let action):
                 let oldRecord = action.oldRecord
@@ -167,6 +176,10 @@ final class RealtimeManager: ObservableObject {
                 
                 if let id = UUID(uuidString: deleted.id) {
                     await deletePostFromRemote(id: id)
+                    
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .postDeleted, object: id)
+                    }
                 }
             default:
                 break
@@ -329,4 +342,7 @@ final class RealtimeManager: ObservableObject {
 // MARK: - Notification Names
 extension Notification.Name {
     static let chapterSyncCompleted = Notification.Name("chapterSyncCompleted")
+    static let postInserted = Notification.Name("postInserted")
+    static let postUpdated = Notification.Name("postUpdated")
+    static let postDeleted = Notification.Name("postDeleted")
 }

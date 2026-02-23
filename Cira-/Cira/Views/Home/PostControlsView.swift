@@ -1,7 +1,26 @@
 import SwiftUI
+import OSLog
+
+private let logger = Logger(subsystem: "tutu.Cira-", category: "LikeDebug")
 
 struct PostControlsView: View {
     let post: Post
+    let onLikeToggle: (UUID) -> Void
+    
+    @State private var isShowingComments = false
+    @State private var isLiked: Bool
+    @State private var likeCount: Int
+    @State private var commentCount: Int
+    @State private var isLiking = false
+    
+    init(post: Post, onLikeToggle: @escaping (UUID) -> Void) {
+        self.post = post
+        self.onLikeToggle = onLikeToggle
+        _isLiked = State(initialValue: post.isLiked)
+        _likeCount = State(initialValue: post.likeCount)
+        _commentCount = State(initialValue: post.commentCount)
+        logger.debug("Init called for \(post.id.uuidString). isLiked: \(post.isLiked)")
+    }
     
     var body: some View {
         VStack(spacing: 12) {
@@ -33,35 +52,107 @@ struct PostControlsView: View {
             // Interaction Bar (Input + Icons)
             HStack(spacing: 12) {
                 // Message Input
-                HStack {
-                    Text("Gửi tin nhắn...")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.black.opacity(0.5))
-                    Spacer()
+                Button(action: { isShowingComments = true }) {
+                    HStack {
+                        Text("Bình luận\(commentCount > 0 ? " (\(commentCount))" : "")...")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.black.opacity(0.5))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        Capsule()
+                            .fill(Color.black.opacity(0.06))
+                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                    )
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule()
-                        .fill(Color.black.opacity(0.06))
-                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
-                )
+                .buttonStyle(.plain)
                 
                 // Reactions
                 HStack(spacing: 16) {
-                    ReactionButton(emoji: "💛")
-                    ReactionButton(emoji: "🔥")
-                    ReactionButton(emoji: "😍")
+                    Button(action: {
+                        toggleLike()
+                    }) {
+                        HStack(spacing: 4) {
+                            Text(isLiked ? "❤️" : "🤍") // Better heart emoji
+                                .font(.system(size: 24))
+                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                            
+                            if likeCount > 0 {
+                                Text("\(likeCount)")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.black.opacity(0.7))
+                            }
+                        }
+                    }
+                    .disabled(isLiking)
                     
-                    Button(action: {}) {
-                        Image(systemName: "face.smiling.inverse")
-                            .font(.system(size: 24))
+                    Button(action: {
+                        isShowingComments = true
+                    }) {
+                        Image(systemName: "bubble.right")
+                            .font(.system(size: 20))
                             .foregroundStyle(.black.opacity(0.6))
                     }
                 }
             }
         }
         .padding(.horizontal, 16)
+        .sheet(isPresented: $isShowingComments) {
+            CommentSheet(postId: post.photos.first?.id ?? post.id) // Fallback for id mapping
+        }
+        .onChange(of: post.isLiked) { oldValue, newValue in
+            logger.debug("onChange(isLiked) for \(post.id.uuidString). old: \(oldValue), new: \(newValue)")
+            isLiked = newValue
+        }
+        .onChange(of: post.likeCount) { oldValue, newValue in
+            logger.debug("onChange(likeCount) for \(post.id.uuidString). old: \(oldValue), new: \(newValue)")
+            likeCount = newValue
+        }
+        .onChange(of: post.commentCount) { oldValue, newValue in
+            commentCount = newValue
+        }
+    }
+    
+    private func toggleLike() {
+        guard !isLiking else { return }
+        isLiking = true
+        
+        let previousLikeState = isLiked
+        let previousCount = likeCount
+        logger.debug("User tapped Like for \(post.id.uuidString). current: \(previousLikeState)")
+        
+        // 1. Optimistic UI update (Local State)
+        isLiked.toggle()
+        if isLiked {
+            likeCount += 1
+        } else {
+            likeCount = max(0, likeCount - 1)
+        }
+        
+        // 2. Sync with Parent ViewModel (So re-renders use updated data)
+        onLikeToggle(post.id)
+        
+        Task {
+            do {
+                try await LikeService.shared.toggleLike(for: post.id)
+                logger.debug("LikeService finished successfully for \(post.id.uuidString)")
+            } catch {
+                let errStr = "Failed to toggle like: \(error)\\n"
+                logger.error("LikeService threw error \(errStr)")
+                let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                try? errStr.write(to: docs.appendingPathComponent("like_error.log"), atomically: true, encoding: .utf8)
+                
+                // Revert on failure
+                DispatchQueue.main.async {
+                    self.isLiked = previousLikeState
+                    self.likeCount = previousCount
+                    self.onLikeToggle(post.id) // Revert parent too
+                }
+            }
+            isLiking = false
+        }
     }
     
     private func formatTime(_ date: Date) -> String {

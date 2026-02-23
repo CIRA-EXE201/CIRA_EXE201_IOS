@@ -36,6 +36,39 @@ final class SyncManager: ObservableObject {
     // MARK: - Setup
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
+        
+        // Fix any duplicate objects created by previous sync bugs
+        deduplicateData(context: modelContext)
+    }
+    
+    private func deduplicateData(context: ModelContext) {
+        do {
+            if let chapters = try? context.fetch(FetchDescriptor<Chapter>()) {
+                var seen = Set<String>()
+                for chapter in chapters {
+                    let idStr = chapter.id.uuidString.lowercased()
+                    if seen.contains(idStr) {
+                        context.delete(chapter)
+                    } else {
+                        seen.insert(idStr)
+                    }
+                }
+            }
+            if let photos = try? context.fetch(FetchDescriptor<Photo>()) {
+                var seen = Set<String>()
+                for photo in photos {
+                    let idStr = photo.id.uuidString.lowercased()
+                    if seen.contains(idStr) {
+                        context.delete(photo)
+                    } else {
+                        seen.insert(idStr)
+                    }
+                }
+            }
+            try context.save()
+        } catch {
+            print("❌ Failed to deduplicate data: \(error)")
+        }
     }
     
     // MARK: - Network Monitoring
@@ -359,7 +392,7 @@ final class SyncManager: ObservableObject {
             // Only if we downloaded *something*
             if !remotePosts.isEmpty {
                  let existingPhotos = try modelContext.fetch(FetchDescriptor<Photo>())
-                 let existingIDs = Set(existingPhotos.map { $0.id.uuidString })
+                 let existingIDs = Set(existingPhotos.map { $0.id.uuidString.lowercased() })
                  
                  for dto in remotePosts {
                      // Upsert logic:
@@ -368,7 +401,7 @@ final class SyncManager: ObservableObject {
                      // We should process even if it exists (to update it).
                      // But `downloadAndSave` currently inserts new logic.
                      
-                     if existingIDs.contains(dto.id) {
+                     if existingIDs.contains(dto.id.lowercased()) {
                          // UPDATE existing (TODO: Implement update logic if needed)
                          // For now, let's assume we want to overwrite/update?
                          // Current logic was: `if !existingIDs.contains(dto.id) { download... }`
@@ -566,12 +599,12 @@ final class SyncManager: ObservableObject {
             // 2. Get existing local chapters
             let existingDescriptor = FetchDescriptor<Chapter>()
             let existingChapters = try modelContext.fetch(existingDescriptor)
-            let existingIDs = Set(existingChapters.map { $0.id.uuidString })
+            let existingIDs = Set(existingChapters.map { $0.id.uuidString.lowercased() })
             
             // 3. Insert new chapters
             var downloadedCount = 0
             for dto in remoteChapters {
-                if !existingIDs.contains(dto.id) {
+                if !existingIDs.contains(dto.id.lowercased()) {
                     await downloadAndSaveChapter(dto: dto)
                     downloadedCount += 1
                 }

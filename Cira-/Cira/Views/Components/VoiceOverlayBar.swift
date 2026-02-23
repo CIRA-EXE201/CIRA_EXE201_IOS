@@ -17,18 +17,19 @@ struct VoiceOverlayBar: View {
         HStack(spacing: 12) {
             // Play/Pause button
             Button(action: { 
-                withAnimation(.spring(response: 0.3)) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                     isPlaying.toggle()
                 }
             }) {
                 Circle()
-                    .fill(Color.black)
-                    .frame(width: 36, height: 36)
+                    .fill(isPlaying ? Color.blue : Color.primary)
+                    .frame(width: 40, height: 40)
                     .overlay {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white)
                     }
+                    .shadow(color: (isPlaying ? Color.blue : Color.black).opacity(0.3), radius: 8, y: 4)
             }
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
             
@@ -36,24 +37,26 @@ struct VoiceOverlayBar: View {
             WaveformView(
                 levels: voiceNote.waveformLevels,
                 progress: progress,
-                activeColor: .black,
-                inactiveColor: .gray.opacity(0.3)
+                activeColor: .primary,
+                inactiveColor: .primary.opacity(0.15)
             )
-            .frame(height: 28)
+            .frame(height: 30)
             
             // Duration
             Text(voiceNote.formattedDuration)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.6))
                 .monospacedDigit()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background {
             Capsule()
-                .fill(.white.opacity(0.95))
-                .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule().stroke(.white.opacity(0.3), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 15, y: 8)
         }
     }
 }

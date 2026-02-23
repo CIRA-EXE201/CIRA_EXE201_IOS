@@ -20,10 +20,71 @@ struct FeedPost: Codable, Identifiable {
     let visibility: String
     let created_at: String
     let updated_at: String?
+    var like_count: Int?
+    var comment_count: Int?
+    var is_liked: Bool?
     
     // Author info from join
-    let author_username: String?
-    let author_avatar_data: String?
+    var author_username: String?
+    var author_avatar_data: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, owner_id, image_path, live_photo_path, message, voice_url, voice_duration, visibility, created_at, updated_at
+        case author_username, author_avatar_data
+        case profiles
+        case like_count, comment_count, is_liked
+    }
+    
+    struct ProfileData: Codable {
+        let username: String?
+        let avatar_data: String?
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        owner_id = try container.decode(UUID.self, forKey: .owner_id)
+        image_path = try container.decodeIfPresent(String.self, forKey: .image_path)
+        live_photo_path = try container.decodeIfPresent(String.self, forKey: .live_photo_path)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        voice_url = try container.decodeIfPresent(String.self, forKey: .voice_url)
+        voice_duration = try container.decodeIfPresent(Double.self, forKey: .voice_duration)
+        visibility = try container.decode(String.self, forKey: .visibility)
+        created_at = try container.decode(String.self, forKey: .created_at)
+        updated_at = try container.decodeIfPresent(String.self, forKey: .updated_at)
+        
+        if let profiles = try container.decodeIfPresent(ProfileData.self, forKey: .profiles) {
+            author_username = profiles.username
+            author_avatar_data = profiles.avatar_data
+        } else {
+            author_username = try container.decodeIfPresent(String.self, forKey: .author_username)
+            author_avatar_data = try container.decodeIfPresent(String.self, forKey: .author_avatar_data)
+        }
+        
+        like_count = try container.decodeIfPresent(Int.self, forKey: .like_count)
+        comment_count = try container.decodeIfPresent(Int.self, forKey: .comment_count)
+        is_liked = try container.decodeIfPresent(Bool.self, forKey: .is_liked)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(owner_id, forKey: .owner_id)
+        try container.encodeIfPresent(image_path, forKey: .image_path)
+        try container.encodeIfPresent(live_photo_path, forKey: .live_photo_path)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(voice_url, forKey: .voice_url)
+        try container.encodeIfPresent(voice_duration, forKey: .voice_duration)
+        try container.encode(visibility, forKey: .visibility)
+        try container.encode(created_at, forKey: .created_at)
+        try container.encodeIfPresent(updated_at, forKey: .updated_at)
+        try container.encodeIfPresent(author_username, forKey: .author_username)
+        try container.encodeIfPresent(author_avatar_data, forKey: .author_avatar_data)
+        try container.encodeIfPresent(like_count, forKey: .like_count)
+        try container.encodeIfPresent(comment_count, forKey: .comment_count)
+        try container.encodeIfPresent(is_liked, forKey: .is_liked)
+        // We don't encode `profiles` because it's a derived/input-only field
+    }
 }
 
 // MARK: - FeedService
@@ -57,18 +118,6 @@ final class FeedService {
         // - Friend posts (visibility = friends/public)
         // - Family posts (visibility = family/public)
         // - Public posts (visibility = public)
-        
-        let query = """
-        SELECT 
-            posts.*,
-            profiles.username as author_username,
-            profiles.avatar_data as author_avatar_data
-        FROM posts
-        LEFT JOIN profiles ON posts.owner_id = profiles.id
-        WHERE posts.is_active = true
-        ORDER BY posts.created_at DESC
-        LIMIT \(limit) OFFSET \(offset)
-        """
         
         let posts: [FeedPost] = try await client
             .rpc("fetch_social_feed", params: ["p_limit": limit, "p_offset": offset])
@@ -107,6 +156,8 @@ final class FeedService {
                 visibility,
                 created_at,
                 updated_at,
+                like_count,
+                comment_count,
                 profiles!posts_owner_id_fkey(username, avatar_data)
             """)
             .eq("is_active", value: true)
@@ -143,9 +194,16 @@ final class FeedService {
             )
         }
         
+        var publicImageURL: URL?
+        if let imagePath = feedPost.image_path {
+            publicImageURL = try? SupabaseManager.shared.client.storage
+                .from("photos")
+                .getPublicURL(path: imagePath)
+        }
+        
         let photoItem = Post.PhotoItem(
             id: feedPost.id,
-            imageURL: nil, // Will load from storage
+            imageURL: publicImageURL,
             imageData: nil,
             livePhotoMoviePath: feedPost.live_photo_path,
             voiceNote: voiceItem
@@ -169,9 +227,9 @@ final class FeedService {
                 avatarURL: nil // Will handle avatar separately
             ),
             createdAt: createdDate,
-            likeCount: 0, // TODO: Add like system
-            commentCount: 0,
-            isLiked: false,
+            likeCount: feedPost.like_count ?? 0,
+            commentCount: feedPost.comment_count ?? 0,
+            isLiked: feedPost.is_liked ?? false,
             message: feedPost.message
         )
     }

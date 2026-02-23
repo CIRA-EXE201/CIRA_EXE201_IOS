@@ -28,6 +28,8 @@ struct ProfileView: View {
     // MARK: - SwiftData
     @Environment(\.modelContext) private var modelContext
     
+    // Remove passed safeArea
+    let safeArea: EdgeInsets
     var onClose: (() -> Void)? = nil
     @State private var showSubscription = false
     
@@ -48,22 +50,24 @@ struct ProfileView: View {
     @State private var scrollOffset: CGFloat = 0
     
     var body: some View {
-        ZStack {
-            // White background
-            Color.white
-                .ignoresSafeArea()
+        GeometryReader { proxy in
             
-            VStack(spacing: 0) {
-                // Header with back button and Gold button
-                headerView
-                    .padding(.top, 8)
-                    .zIndex(1) // Ensure header is above scroll content
+            ZStack {
+                // White background
+                Color.white
+                    .ignoresSafeArea()
                 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
-                        // User Info - Avatar left, Name right
-                        userInfoSection
-                            .opacity(scrollOffset < -50 ? 0 : 1) // Fade out effect
+                VStack(spacing: 0) {
+                    // Header with back button and Gold button
+                    headerView
+                        .padding(.top, safeArea.top + 8)
+                        .zIndex(1) // Ensure header is above scroll content
+                    
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 24) {
+                            // User Info - Avatar left, Name right
+                            userInfoSection
+                                .opacity(scrollOffset < -50 ? 0 : 1) // Fade out effect
                         
                         // Streak highlight card
                         streakCard
@@ -105,6 +109,7 @@ struct ProfileView: View {
         .task(id: selectedYear) {
             await fetchCalendarPhotos(for: selectedYear)
         }
+    }
     }
     
     // MARK: - Fetch Calendar Photos
@@ -651,5 +656,5 @@ struct ProfileView: View {
 }
 
 #Preview {
-    ProfileView()
+    ProfileView(safeArea: EdgeInsets())
 }

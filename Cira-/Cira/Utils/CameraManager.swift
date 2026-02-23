@@ -274,6 +274,35 @@ class CameraManager: NSObject, ObservableObject {
     
     // MARK: - Capture Photo (with Live Photo support per Apple docs)
     func capturePhoto() {
+        #if targetEnvironment(simulator)
+        print("📷 Simulator detected: Mocking photo capture")
+        Task { @MainActor in
+            let size = CGSize(width: 1080, height: 1920)
+            let renderer = UIGraphicsImageRenderer(size: size)
+            let mockImage = renderer.image { ctx in
+                UIColor.darkGray.setFill()
+                ctx.fill(CGRect(origin: .zero, size: size))
+                
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.alignment = .center
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.boldSystemFont(ofSize: 60),
+                    .foregroundColor: UIColor.white,
+                    .paragraphStyle: paragraphStyle
+                ]
+                
+                let string = "Simulator\nPhoto" as NSString
+                string.draw(in: CGRect(x: 0, y: size.height/2 - 80, width: size.width, height: 160),
+                           withAttributes: attrs)
+            }
+            
+            self.capturedImage = mockImage
+            self.capturedPhotoData = mockImage.jpegData(compressionQuality: 0.9)
+            print("✅ Simulator: Mock photo captured")
+        }
+        return
+        #endif
+
         // Create photo settings with HEVC format (best for Live Photo)
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
         

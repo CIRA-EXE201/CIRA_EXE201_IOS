@@ -2,285 +2,199 @@
 //  HomeView.swift
 //  Cira
 //
-//  Home Feed - Camera First, Vertical Scroll
-//
-//
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = HomeViewModel()
     
-    // Scroll state
-    @State private var scrollPosition: String? = "camera" // Default to camera
     @State private var showProfile = false
     @State private var showNotifications = false
-    @State private var dragOffset: CGFloat = 0 // Interactive drag state
-    
-    // Top bar moved to HomeTopBar struct
+    @State private var showSocialHub = false
+    @State private var dragOffset: CGFloat = 0
+    @State private var globalSafeArea: EdgeInsets = .init()
     
     var body: some View {
-        GeometryReader { geometry in
-            let fullHeight = geometry.size.height
-            let safeArea = geometry.safeAreaInsets
+        ZStack {
+            // Probe for Safe Area
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: SafeAreaPreferenceKey.self, value: proxy.safeAreaInsets)
+            }
+            .onPreferenceChange(SafeAreaPreferenceKey.self) { insets in
+                print("👉 Global Safe Area Recieved: \(insets)")
+                self.globalSafeArea = insets
+            }
             
-            // Offset State for interactive drag
-            let currentOffset = (showProfile ? 0 : -geometry.size.width) + dragOffset
+            GeometryReader { geometry in
+                let fullScreenSize = geometry.size
+                let safeArea = globalSafeArea // Use captured safe area
+                let currentOffset = (showProfile ? 0 : -fullScreenSize.width) + dragOffset
             
             HStack(spacing: 0) {
-                // Left Panel: Profile View (Width = Screen Width)
-                ProfileView(onClose: { withAnimation { showProfile = false } })
-                    .frame(width: geometry.size.width)
+                // LEFT: Profile Panel
+                ProfileView(safeArea: safeArea, onClose: { withAnimation(.spring()) { showProfile = false } })
+                    .frame(width: fullScreenSize.width)
                     .background(Color.black)
                 
-                // Right Panel: Main Content (Width = Screen Width)
+                // RIGHT: Main Content Stack
                 ZStack {
-                    // Background - White with gradient and noise
-                    GradientNoiseBackground()
+                    // A. Seamless Global Background
+                    CiraMeshBackground()
+                        .ignoresSafeArea(.all)
                     
-                    // Vertical Paging Scroll
+                    // B. Vertical Paging Scroll
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 0) { // Changed to VStack for tighter physics calculation
-                            // 1. Camera (Page 1)
-                            CameraView(topSafeArea: safeArea.top, bottomSafeArea: safeArea.bottom)
-                                .frame(width: geometry.size.width, height: fullHeight)
+                        LazyVStack(spacing: 0) {
+                            // 1. Camera Page
+                            CameraView(screenSize: fullScreenSize, safeArea: safeArea)
+                                .containerRelativeFrame(.vertical)
                                 .id("camera")
                             
-                            // 2. Feed Posts (Pages 2..N) - Combined local + social feed
-                            if !viewModel.combinedPosts.isEmpty {
-                                ForEach(viewModel.combinedPosts) { post in
-                                    FeedPostContainer(post: post, safeArea: safeArea, size: geometry.size)
-                                        .frame(width: geometry.size.width, height: fullHeight)
-                                        .id(post.id.uuidString)
+                            // 2. Post Pages
+                            ForEach(viewModel.combinedPosts) { post in
+                                ContentPageWrapper(screenSize: fullScreenSize, safeArea: safeArea) {
+                                    PostCardView(
+                                        post: post,
+                                        cardWidth: fullScreenSize.width,
+                                        cardHeight: CardDimensions.calculateCardHeight(screenHeight: fullScreenSize.height, safeArea: safeArea),
+                                        safeAreaTop: safeArea.top
+                                    )
+                                } controls: {
+                                    PostControlsView(post: post) { postId in
+                                        viewModel.toggleLike(for: postId)
+                                    }
                                 }
-                            } else {
-                                // Empty State Page if no posts
-                                emptyStateView
-                                    .frame(width: geometry.size.width, height: fullHeight)
+                                .containerRelativeFrame(.vertical)
+                                .id(post.id.uuidString)
                             }
                         }
                         .scrollTargetLayout()
                     }
-                    .scrollTargetBehavior(.paging) // Strict single-page snapping
+                    .scrollTargetBehavior(.paging)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .ignoresSafeArea(.all)
                     
-                    // Overlay Top Bar
-                    VStack {
-                        HomeTopBar(showProfile: $showProfile, showNotifications: $showNotifications)
+                    // C. Fixed Overlays
+                    VStack(spacing: 0) {
+                        HomeTopBar(showProfile: $showProfile, showNotifications: $showNotifications, showSocialHub: $showSocialHub)
+                            .padding(.top, safeArea.top)
                             .padding(.horizontal, 4)
-                            .padding(.bottom, 8)
+                            .frame(height: CardDimensions.topAreaHeight(safeArea: safeArea))
+                        
                         Spacer()
                     }
+                    .allowsHitTesting(true)
                 }
-                .frame(width: geometry.size.width) // Explicit width for Main Content
+                .frame(width: fullScreenSize.width)
             }
-            .frame(width: geometry.size.width * 2, alignment: .leading) // Total width is 2x Screen
-            .offset(x: currentOffset) // Apply sliding offset
-            .animation(.interactiveSpring(), value: currentOffset) // Smooth animation for drag
+            .frame(width: fullScreenSize.width * 2, alignment: .leading)
+            .offset(x: currentOffset)
+            .animation(.interactiveSpring(), value: currentOffset)
             .gesture(
                 DragGesture()
                     .onChanged { value in
                         let translation = value.translation.width
                         if showProfile {
-                            // Can only drag LEFT (negative) to close
-                            if translation < 0 {
-                                dragOffset = translation
-                            }
+                            if translation < 0 { dragOffset = translation }
                         } else {
-                            // Can only drag RIGHT (positive) to open
-                            if translation > 0 {
-                                dragOffset = translation
-                            }
+                            if translation > 0 { dragOffset = translation }
                         }
                     }
                     .onEnded { value in
-                        let threshold = geometry.size.width * 0.3
-                        
+                        let threshold = fullScreenSize.width * 0.3
                         if showProfile {
-                            // Closing: If dragged left sufficiently
                             if value.translation.width < -threshold {
-                                withAnimation {
-                                    showProfile = false
-                                }
-                            } else {
-                                // Snap back to open
-                                withAnimation {
-                                    // No state change needed, just reset dragOffset
-                                }
+                                withAnimation { showProfile = false }
                             }
                         } else {
-                            // Opening: If dragged right sufficiently
                             if value.translation.width > threshold {
-                                withAnimation {
-                                    showProfile = true
-                                }
+                                withAnimation { showProfile = true }
                             }
                         }
-                        dragOffset = 0 // Key: reset drag offset so base state takes over
+                        dragOffset = 0
                     }
             )
-        }
-        // Removed .ignoresSafeArea() to respect safe area for content
-        .onAppear {
-            viewModel.setup(modelContext: modelContext)
-        }
-    }
-    
-    // MARK: - Empty State
-    var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "photo.stack")
-            .font(.system(size: 60))
-            .foregroundStyle(.gray)
-            
-            Text("Scroll up to see memories")
-            .font(.headline)
-            .foregroundStyle(.gray)
-            
-            Text("Take a photo to start your journey!")
-            .font(.subheadline)
-            .foregroundStyle(.gray.opacity(0.7))
+            }
+            .ignoresSafeArea()
+            .onAppear {
+                viewModel.setup(modelContext: modelContext)
+            }
+            .sheet(isPresented: $showSocialHub) {
+                SocialHubView()
+            }
         }
     }
 }
 
-// MARK: - Feed Post Container
-// Wraps PostCardView with User Info & Interactions
-struct FeedPostContainer: View {
-    let post: Post
+// MARK: - Standard Page Wrapper
+struct ContentPageWrapper<Main: View, Controls: View>: View {
+    let screenSize: CGSize
     let safeArea: EdgeInsets
-    let size: CGSize // Accept trusted size from HomeView
+    let main: Main
+    let controls: Controls
     
-    // Layout constants
-    private let horizontalPadding: CGFloat = 0
-    private let topPadding: CGFloat = 0 
-    
-    // Check if current post has voice note
-    private var hasVoice: Bool {
-        guard let firstPhoto = post.photos.first else { return false }
-        return firstPhoto.voiceNote != nil
+    init(
+        screenSize: CGSize,
+        safeArea: EdgeInsets,
+        @ViewBuilder main: () -> Main,
+        @ViewBuilder controls: () -> Controls
+    ) {
+        self.screenSize = screenSize
+        self.safeArea = safeArea
+        self.main = main()
+        self.controls = controls()
     }
     
     var body: some View {
-        let screenWidth = size.width
-        let screenHeight = size.height
-        
-        // MARK: - Post Page Layout
-        // Standardized Page: Fills exactly 1 Screen
-        
-        // 1. Defined Page Margins (Internal)
-        let headerInset: CGFloat = safeArea.top + 60 // Space for Floating Header
-        let footerInset: CGFloat = safeArea.bottom + 10 // Space for Home Indicator
-        
-        // 2. Component Heights
-        let controlsHeight: CGFloat = 110 // Fixed height for Controls
-        let gapHeight: CGFloat = 16 // Standard Gap
-        
-        // 3. Voice bar height if applicable - this goes BELOW the card, not inside
-        let voiceBarTotal: CGFloat = hasVoice ? (PostCardView.voiceBarHeight + PostCardView.voiceBarSpacing) : 0
-        
-        // 4. Dynamic Calculation
-        // Image card gets FIXED height regardless of voice bar
-        // Available for Image Card = Screen - Header - Gap - Controls - Footer
-        let cardHeight = max(screenHeight - headerInset - gapHeight - controlsHeight - footerInset, 100)
-        
-        // When voice exists, we need to scroll or overlap - for now, reduce controls slightly
-        let adjustedControlsHeight = hasVoice ? max(controlsHeight - voiceBarTotal, 60) : controlsHeight
-        
-        let cardWidth = screenWidth
+        let cardH = CardDimensions.calculateCardHeight(screenHeight: screenSize.height, safeArea: safeArea)
+        let centeringSpacerH = CardDimensions.calculateVerticalCenteringPadding(screenHeight: screenSize.height, safeArea: safeArea)
+        let topAreaH = CardDimensions.topAreaHeight(safeArea: safeArea)
         
         VStack(spacing: 0) {
-            // A. Header Spacer (Push content down)
-            Spacer()
-                .frame(height: headerInset)
-            
-            // B. Image Frame + Voice Bar (Dynamic)
-            PostCardView(
-                post: post,
-                cardWidth: cardWidth,
-                cardHeight: cardHeight,
-                safeAreaTop: safeArea.top
-            )
-            
-            // C. Gap
-            Spacer()
-                .frame(height: gapHeight)
-            
-            // D. Controls (Adjusted when voice exists)
-            PostControlsView(post: post)
-                .frame(height: adjustedControlsHeight, alignment: .top)
-            
-            // E. Footer Spacer (Bottom Safe Area)
-            Spacer()
-                .frame(height: footerInset)
+            Color.clear.frame(height: topAreaH)
+            Color.clear.frame(height: centeringSpacerH)
+            main.frame(width: screenSize.width, height: cardH)
+            Color.clear.frame(height: CardDimensions.standardGap)
+            controls.frame(height: CardDimensions.interactionHeight, alignment: .top)
+            Spacer() 
         }
-        .frame(width: screenWidth, height: screenHeight) // STRICT PAGE SIZE
     }
-    }
-    
-// Mark: - Home Top Bar
+}
+
+// MARK: - Home Top Bar
 struct HomeTopBar: View {
     @Binding var showProfile: Bool
     @Binding var showNotifications: Bool
+    @Binding var showSocialHub: Bool
     
     var body: some View {
         HStack {
-            // Avatar (Left)
-            Button(action: { withAnimation { showProfile = true } }) {
-                Circle()
-                    .fill(Color.black.opacity(0.1))
-                    .frame(width: 40, height: 40)
-                    .overlay {
-                        Image(systemName: "person.fill")
-                            .foregroundStyle(.black.opacity(0.7))
-                    }
+            Button(action: { withAnimation(.spring()) { showProfile = true } }) {
+                Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44)
+                    .overlay(Image(systemName: "person.fill").foregroundStyle(.black.opacity(0.7)))
             }
-            
             Spacer()
-            
-            // "11 người bạn" / Friends Pill (Center)
-            Button(action: {}) {
-                HStack(spacing: 6) {
+            Button(action: { showSocialHub = true }) {
+                HStack(spacing: 8) {
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.black.opacity(0.8))
-                    Text("11 người bạn")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.black.opacity(0.8))
+                    Text("Kết nối").font(.system(size: 14, weight: .bold))
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(Color.black.opacity(0.08)))
+                .foregroundStyle(.black).padding(.horizontal, 16).padding(.vertical, 10)
+                .background(Capsule().fill(.ultraThinMaterial))
             }
-            
             Spacer()
-            
-            // Chat/Notification (Right)
             Button(action: { showNotifications = true }) {
-                ZStack {
-                    Image(systemName: "bubble.right.fill") // Chat bubble look
-                        .font(.system(size: 24))
-                        .foregroundStyle(.black.opacity(0.6))
-                    
-                    // Badge
-                    Circle()
-                        .fill(Color.orange) // Matches golden theme
-                        .frame(width: 12, height: 12)
-                        .offset(x: 10, y: -10)
-                        .overlay {
-                            Text("1")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white)
-                                .offset(x: 10, y: -10)
-                        }
-                }
-                .frame(width: 40, height: 40)
+                Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44)
+                    .overlay(ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill").foregroundStyle(.black.opacity(0.7))
+                        Circle().fill(Color.orange).frame(width: 10, height: 10).offset(x: 2, y: -2)
+                    })
             }
         }
+        .padding(.horizontal, 16)
     }
-}
-
-#Preview {
-    HomeView()
 }

@@ -14,6 +14,9 @@ struct PostDTO: Codable {
     let visibility: String?  // 'private', 'friends', 'family', 'public'
     let created_at: String
     let updated_at: String?
+    
+    var like_count: Int?
+    var comment_count: Int?
 }
 
 // MARK: - Chapter DTO for Supabase

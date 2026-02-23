@@ -81,6 +81,7 @@ final class HomeViewModel: ObservableObject {
     }
     
     private var modelContext: ModelContext?
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Init
     init() {}
@@ -113,6 +114,26 @@ final class HomeViewModel: ObservableObject {
             await RealtimeManager.shared.startListening()
         }
         
+        // Listen to realtime updates via NotificationCenter
+        NotificationCenter.default.publisher(for: .postUpdated)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let dto = notification.object as? PostDTO,
+                      let postId = UUID(uuidString: dto.id) else { return }
+                
+                self.updatePostFromNetwork(id: postId, likeCount: dto.like_count ?? 0, commentCount: dto.comment_count ?? 0)
+            }
+            .store(in: &cancellables)
+            
+        NotificationCenter.default.publisher(for: .postDeleted)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let self = self, let postId = notification.object as? UUID else { return }
+                self.removePost(id: postId)
+            }
+            .store(in: &cancellables)
+        
         // Load friends and families from Supabase
         Task {
             await loadFriendsAndFamilies()
@@ -141,7 +162,7 @@ final class HomeViewModel: ObservableObject {
     // MARK: - Load Local Posts from SwiftData
     func loadLocalPosts() {
         guard let modelContext = modelContext else {
-            posts = Post.mockPosts
+            posts = []
             return
         }
         
@@ -160,24 +181,42 @@ final class HomeViewModel: ObservableObject {
             return true
         }
         
+        // Remove mock posts logic as per user request
         posts = uniquePosts
     }
     
     // MARK: - Load Social Feed from Friends/Family
+    @MainActor
     func loadSocialFeed() async {
         do {
             let socialFeed = try await FeedService.shared.fetchSimpleFeed(limit: 50)
             
             // Convert FeedPost to Post for display
-            let displayPosts = socialFeed.map { feedPost in
+            var displayPosts = socialFeed.map { feedPost in
                 FeedService.shared.convertToDisplayPost(feedPost: feedPost)
             }
             
-            feedPosts = displayPosts
+            // Try to set isLiked correctly using fetchLikedPostIds
+            if let likedIds = try? await LikeService.shared.fetchLikedPostIds() {
+                displayPosts = displayPosts.map { post in
+                    var p = post
+                    p.isLiked = likedIds.contains(p.id)
+                    return p
+                }
+                
+                // Also update local `posts` since they might have been loaded earlier as false
+                self.posts = self.posts.map { post in
+                    var p = post
+                    p.isLiked = likedIds.contains(p.id)
+                    return p
+                }
+            }
+            
+            self.feedPosts = displayPosts
             print("✅ Loaded \(feedPosts.count) posts from social feed")
         } catch {
             print("❌ Failed to load social feed: \(error)")
-            errorMessage = "Failed to load feed: \(error.localizedDescription)"
+            self.errorMessage = "Failed to load feed: \(error.localizedDescription)"
         }
     }
     
@@ -248,9 +287,37 @@ final class HomeViewModel: ObservableObject {
         // TODO: Implement pagination
     }
     
-    func likePost(_ post: Post) {
-        guard let index = posts.firstIndex(where: { $0.id == post.id }) else { return }
-        posts[index].isLiked.toggle()
-        posts[index].likeCount += posts[index].isLiked ? 1 : -1
+    func toggleLike(for postId: UUID) {
+        // Find in local posts
+        if let index = posts.firstIndex(where: { $0.id == postId }) {
+            posts[index].isLiked.toggle()
+            posts[index].likeCount += posts[index].isLiked ? 1 : -1
+        }
+        
+        // Find in feed posts
+        if let index = feedPosts.firstIndex(where: { $0.id == postId }) {
+            feedPosts[index].isLiked.toggle()
+            feedPosts[index].likeCount += feedPosts[index].isLiked ? 1 : -1
+        }
+    }
+    
+    // MARK: - Handlers for Realtime Events
+    private func updatePostFromNetwork(id: UUID, likeCount: Int, commentCount: Int) {
+        // Update in posts
+        if let index = posts.firstIndex(where: { $0.id == id }) {
+            posts[index].likeCount = likeCount
+            posts[index].commentCount = commentCount
+        }
+        
+        // Update in feedPosts
+        if let index = feedPosts.firstIndex(where: { $0.id == id }) {
+            feedPosts[index].likeCount = likeCount
+            feedPosts[index].commentCount = commentCount
+        }
+    }
+    
+    private func removePost(id: UUID) {
+        posts.removeAll(where: { $0.id == id })
+        feedPosts.removeAll(where: { $0.id == id })
     }
 }
