@@ -11,10 +11,11 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = HomeViewModel()
     
-    @State private var showProfile = false
+    @Binding var showProfile: Bool
+    var avatarData: String?
+    
     @State private var showNotifications = false
     @State private var showSocialHub = false
-    @State private var dragOffset: CGFloat = 0
     @State private var globalSafeArea: EdgeInsets = .init()
     
     var body: some View {
@@ -32,13 +33,6 @@ struct HomeView: View {
             GeometryReader { geometry in
                 let fullScreenSize = geometry.size
                 let safeArea = globalSafeArea // Use captured safe area
-                let currentOffset = (showProfile ? 0 : -fullScreenSize.width) + dragOffset
-            
-            HStack(spacing: 0) {
-                // LEFT: Profile Panel
-                ProfileView(safeArea: safeArea, onClose: { withAnimation(.spring()) { showProfile = false } })
-                    .frame(width: fullScreenSize.width)
-                    .background(Color.black)
                 
                 // RIGHT: Main Content Stack
                 ZStack {
@@ -80,7 +74,7 @@ struct HomeView: View {
                     
                     // C. Fixed Overlays
                     VStack(spacing: 0) {
-                        HomeTopBar(showProfile: $showProfile, showNotifications: $showNotifications, showSocialHub: $showSocialHub)
+                        HomeTopBar(showProfile: $showProfile, showNotifications: $showNotifications, showSocialHub: $showSocialHub, avatarData: avatarData)
                             .padding(.top, safeArea.top)
                             .padding(.horizontal, 4)
                             .frame(height: CardDimensions.topAreaHeight(safeArea: safeArea))
@@ -91,37 +85,12 @@ struct HomeView: View {
                 }
                 .frame(width: fullScreenSize.width)
             }
-            .frame(width: fullScreenSize.width * 2, alignment: .leading)
-            .offset(x: currentOffset)
-            .animation(.interactiveSpring(), value: currentOffset)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let translation = value.translation.width
-                        if showProfile {
-                            if translation < 0 { dragOffset = translation }
-                        } else {
-                            if translation > 0 { dragOffset = translation }
-                        }
-                    }
-                    .onEnded { value in
-                        let threshold = fullScreenSize.width * 0.3
-                        if showProfile {
-                            if value.translation.width < -threshold {
-                                withAnimation { showProfile = false }
-                            }
-                        } else {
-                            if value.translation.width > threshold {
-                                withAnimation { showProfile = true }
-                            }
-                        }
-                        dragOffset = 0
-                    }
-            )
-            }
             .ignoresSafeArea()
             .onAppear {
                 viewModel.setup(modelContext: modelContext)
+            }
+            .fullScreenCover(isPresented: $showNotifications) {
+                MessageInboxView()
             }
             .sheet(isPresented: $showSocialHub) {
                 SocialHubView()
@@ -170,12 +139,16 @@ struct HomeTopBar: View {
     @Binding var showProfile: Bool
     @Binding var showNotifications: Bool
     @Binding var showSocialHub: Bool
+    var avatarData: String?
     
     var body: some View {
         HStack {
-            Button(action: { withAnimation(.spring()) { showProfile = true } }) {
+            Button(action: { showNotifications = true }) {
                 Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44)
-                    .overlay(Image(systemName: "person.fill").foregroundStyle(.black.opacity(0.7)))
+                    .overlay(ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill").foregroundStyle(.black.opacity(0.7))
+                        Circle().fill(Color.orange).frame(width: 10, height: 10).offset(x: 2, y: -2)
+                    })
             }
             Spacer()
             Button(action: { showSocialHub = true }) {
@@ -187,12 +160,24 @@ struct HomeTopBar: View {
                 .background(Capsule().fill(.ultraThinMaterial))
             }
             Spacer()
-            Button(action: { showNotifications = true }) {
-                Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44)
-                    .overlay(ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bubble.left.and.bubble.right.fill").foregroundStyle(.black.opacity(0.7))
-                        Circle().fill(Color.orange).frame(width: 10, height: 10).offset(x: 2, y: -2)
-                    })
+            // Profile Avatar
+            Button(action: { showProfile = true }) {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 44, height: 44)
+                    .overlay {
+                        if let avatarStr = avatarData,
+                           let data = Data(base64Encoded: avatarStr),
+                           let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.fill")
+                                .foregroundStyle(.black.opacity(0.7))
+                        }
+                    }
             }
         }
         .padding(.horizontal, 16)

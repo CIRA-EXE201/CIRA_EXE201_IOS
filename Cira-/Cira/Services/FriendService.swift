@@ -23,6 +23,13 @@ struct FriendProfile: Codable, Identifiable {
     let avatar_data: String?
 }
 
+struct PendingFriendRequest: Identifiable {
+    var id: UUID { friendshipId }
+    let friendshipId: UUID
+    let profile: FriendProfile
+}
+
+
 // MARK: - FriendService
 @MainActor
 final class FriendService {
@@ -153,6 +160,18 @@ final class FriendService {
         return requests
     }
     
+    // MARK: - Get Pending Requests with Profiles
+    func getPendingFriendRequestsWithProfiles() async throws -> [PendingFriendRequest] {
+        let friendships = try await getPendingRequests()
+        var results: [PendingFriendRequest] = []
+        for friendship in friendships {
+            if let profile = try? await getUserProfile(userId: friendship.requester_id) {
+                results.append(PendingFriendRequest(friendshipId: friendship.id, profile: profile))
+            }
+        }
+        return results
+    }
+    
     // MARK: - Search Users by Username
     func searchUsers(query: String) async throws -> [FriendProfile] {
         guard !query.isEmpty else { return [] }
@@ -167,6 +186,18 @@ final class FriendService {
         
         // Filter out current user
         return profiles.filter { $0.id != currentUserId }
+    }
+    
+    // MARK: - Get User Profile by ID
+    func getUserProfile(userId: UUID) async throws -> FriendProfile {
+        let profile: FriendProfile = try await client
+            .from("profiles")
+            .select("id, username, avatar_data")
+            .eq("id", value: userId.uuidString)
+            .single()
+            .execute()
+            .value
+        return profile
     }
 }
 

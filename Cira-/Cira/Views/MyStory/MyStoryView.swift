@@ -15,6 +15,9 @@ struct MyStoryView: View {
     @State private var showCreateChapter = false
     @State private var selectedChapter: Chapter?
     
+    @Binding var showProfile: Bool
+    var avatarData: String?
+    
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
@@ -88,11 +91,24 @@ struct MyStoryView: View {
             
             Spacer()
             
-            // Add button
-            Button(action: { showCreateChapter = true }) {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.primary)
+            // Profile button
+            Button(action: { showProfile = true }) {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 44, height: 44)
+                    .overlay {
+                        if let avatarStr = avatarData,
+                           let data = Data(base64Encoded: avatarStr),
+                           let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.fill")
+                                .foregroundStyle(.black.opacity(0.7))
+                        }
+                    }
             }
         }
         .padding(.horizontal, 20)
@@ -271,6 +287,6 @@ struct ChapterCard: View {
 }
 
 #Preview {
-    MyStoryView()
+    MyStoryView(showProfile: .constant(false))
         .modelContainer(for: [Chapter.self, Photo.self, VoiceNote.self], inMemory: true)
 }

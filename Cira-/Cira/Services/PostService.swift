@@ -8,6 +8,8 @@
 import Foundation
 import SwiftData
 import UIKit
+import Supabase
+import Auth
 
 @MainActor
 final class PostService {
@@ -139,11 +141,14 @@ final class PostService {
             voiceNote: voiceItem
         )
         
+        let currentUserIdStr = SupabaseManager.shared.currentUser?.id.uuidString ?? UUID().uuidString
+        let currentUserId = UUID(uuidString: currentUserIdStr) ?? UUID()
+        
         return Post(
             id: photo.id,
             type: .single,
             photos: [photoItem],
-            author: Post.Author(id: UUID(), username: "Me", avatarURL: nil),
+            author: Post.Author(id: currentUserId, username: "Me", avatarURL: nil),
             createdAt: photo.createdAt,
             likeCount: 0,
             commentCount: 0,

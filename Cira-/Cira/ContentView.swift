@@ -7,10 +7,13 @@
 //
 
 import SwiftUI
+import Supabase
 
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var showAIChatPopup = false
+    @State private var showProfile = false
+    @State private var userAvatarData: String? = nil
     
     enum Tab: Int, CaseIterable {
         case home = 0
@@ -38,25 +41,33 @@ struct ContentView: View {
         ZStack {
             TabView(selection: $selectedTab) {
                 // Home now contains both Camera and Feed
-                HomeView()
+                HomeView(showProfile: $showProfile, avatarData: userAvatarData)
                     .tabItem {
                         Label(Tab.home.title, systemImage: Tab.home.icon)
                     }
                     .tag(Tab.home)
                 
-                MyStoryView()
+                MyStoryView(showProfile: $showProfile, avatarData: userAvatarData)
                     .tabItem {
                         Label(Tab.myStory.title, systemImage: Tab.myStory.icon)
                     }
                     .tag(Tab.myStory)
                 
-                AIVoiceChatView(showChatPopup: $showAIChatPopup)
+                AIVoiceChatView(showChatPopup: $showAIChatPopup, showProfile: $showProfile, avatarData: userAvatarData)
                     .tabItem {
                         Label("Assistant", systemImage: "waveform.circle.fill")
                     }
                     .tag(Tab.ai)
             }
             .tint(.black)
+            .fullScreenCover(isPresented: $showProfile) {
+                ProfileView(safeArea: .init()) {
+                    showProfile = false
+                }
+            }
+            .task {
+                await fetchUserAvatar()
+            }
             
             // Chat popup overlay - at ContentView level to cover TabBar
             if showAIChatPopup {
@@ -77,25 +88,76 @@ struct ContentView: View {
             }
         }
     }
+    
+    // MARK: - Fetch User Avatar
+    private func fetchUserAvatar() async {
+        guard let userId = SupabaseManager.shared.currentUser?.id else { return }
+        do {
+            struct SimpleProfile: Decodable { let avatar_data: String? }
+            let profile: SimpleProfile = try await SupabaseManager.shared.client
+                .from("profiles")
+                .select("avatar_data")
+                .eq("id", value: userId.uuidString)
+                .single()
+                .execute()
+                .value
+            
+            await MainActor.run {
+                self.userAvatarData = profile.avatar_data
+            }
+        } catch {
+            print("Failed to fetch user avatar in ContentView: \(error)")
+        }
+    }
+}
+
+// MARK: - Models
+enum AINotificationType {
+    case like
+    case birthday
+    case memoryReview
+    case suggestion
+    
+    var icon: String {
+        switch self {
+        case .like: return "heart.fill"
+        case .birthday: return "gift.fill"
+        case .memoryReview: return "clock.arrow.circlepath"
+        case .suggestion: return "sparkles"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .like: return .red
+        case .birthday: return .orange
+        case .memoryReview: return .blue
+        case .suggestion: return .purple
+        }
+    }
+}
+
+struct AINotification: Identifiable {
+    let id = UUID()
+    let type: AINotificationType
+    let title: String
+    let subtitle: String
+    let timeAgo: String
 }
 
 // MARK: - AI Voice Chat View
 struct AIVoiceChatView: View {
     @State private var messageText = ""
     @Binding var showChatPopup: Bool
+    @Binding var showProfile: Bool
+    var avatarData: String?
     
-    // Sample memory suggestions from AI
-    private let memorySuggestions: [MemorySuggestion] = [
-        MemorySuggestion(icon: "calendar", title: "One year ago today", description: "You took 5 photos in Da Lat", color: .black),
-        MemorySuggestion(icon: "heart.fill", title: "Best memories", description: "November family photos were most loved", color: .black),
-        MemorySuggestion(icon: "sparkles", title: "Create new album", description: "AI suggests: 2024 Pets compilation", color: .black),
-        MemorySuggestion(icon: "clock.fill", title: "Don't forget to record", description: "You haven't recorded your voice this week", color: .black),
-    ]
-    
-    // Sample reminders
-    private let reminders: [MemoryReminder] = [
-        MemoryReminder(type: .birthday, title: "Mom's Birthday", daysLeft: 5),
-        MemoryReminder(type: .anniversary, title: "3 Year Anniversary", daysLeft: 12),
+    // Hardcoded mock data to demonstrate the UI requested by the user
+    private let notifications: [AINotification] = [
+        AINotification(type: .birthday, title: "Sắp đến sinh nhật Mẹ", subtitle: "Còn 5 ngày nữa. Bạn có muốn tạo một video kỷ niệm không?", timeAgo: "Hôm nay"),
+        AINotification(type: .like, title: "Trung Hiếu đã thả tim bài viết của bạn", subtitle: "Album: Chuyến đi Đà Lạt tháng 10", timeAgo: "2 giờ trước"),
+        AINotification(type: .memoryReview, title: "1 năm nhìn lại", subtitle: "Bạn có 15 bức ảnh và 2 ghi âm giọng nói vào ngày này năm ngoái.", timeAgo: "Hôm qua"),
+        AINotification(type: .suggestion, title: "Gợi ý kết nối", subtitle: "Đã 3 tháng rồi bạn chưa cập nhật câu chuyện nào với Gia đình.", timeAgo: "Tuần trước")
     ]
     
     var body: some View {
@@ -113,14 +175,9 @@ struct AIVoiceChatView: View {
                     
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 24) {
-                            // AI Greeting
-                            aiGreetingCard
                             
-                            // Memory Suggestions
-                            suggestionsSection
-                            
-                            // Upcoming Reminders
-                            remindersSection
+                            // Important Notifications / Reminders at the top
+                            notificationsSection
                             
                             Spacer(minLength: 140)
                         }
@@ -138,6 +195,22 @@ struct AIVoiceChatView: View {
         }
     }
     
+    // MARK: - Notifications & Reminders Section
+    @ViewBuilder
+    private var notificationsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Thông báo & Lời nhắc")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            VStack(spacing: 12) {
+                ForEach(notifications) { notification in
+                    AINotificationCard(notification: notification)
+                }
+            }
+        }
+    }
+    
     // MARK: - Header
     private var headerView: some View {
         HStack {
@@ -146,83 +219,35 @@ struct AIVoiceChatView: View {
                     .font(.title)
                     .fontWeight(.bold)
                 
-                Text("Memory suggestions and reminders")
+                Text("Gợi ý, thông báo và đồng hành cùng ký ức")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             
             Spacer()
             
-            // Settings button
-            Button(action: {}) {
-                Image(systemName: "gearshape")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
+            // Profile button
+            Button(action: { showProfile = true }) {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 44, height: 44)
+                    .overlay {
+                        if let avatarStr = avatarData,
+                           let data = Data(base64Encoded: avatarStr),
+                           let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.fill")
+                                .foregroundStyle(.black.opacity(0.7))
+                        }
+                    }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
-    }
-    
-    // MARK: - AI Greeting Card
-    private var aiGreetingCard: some View {
-        VStack(spacing: 16) {
-            // AI Avatar
-            ZStack {
-                Circle()
-                    .fill(Color.black.opacity(0.1))
-                    .frame(width: 70, height: 70)
-                
-                Image(systemName: "sparkles")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.black)
-            }
-            
-            Text("Hello! 👋")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text("I can help you search memories, create albums, or remind you of important dates.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.gray.opacity(0.06))
-        )
-    }
-    
-    // MARK: - Suggestions Section
-    private var suggestionsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Suggestions for you")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            VStack(spacing: 12) {
-                ForEach(memorySuggestions) { suggestion in
-                    SuggestionCard(suggestion: suggestion)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Reminders Section
-    private var remindersSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Upcoming")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            VStack(spacing: 12) {
-                ForEach(reminders) { reminder in
-                    ReminderCard(reminder: reminder)
-                }
-            }
-        }
     }
     
     // MARK: - Input Bar with Liquid Glass
@@ -310,6 +335,50 @@ struct MemoryReminder: Identifiable {
             case .custom: return .black
             }
         }
+    }
+}
+
+// MARK: - Notification Card
+struct AINotificationCard: View {
+    let notification: AINotification
+    
+    var body: some View {
+        HStack(spacing: 14) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(notification.type.color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: notification.type.icon)
+                    .font(.system(size: 18))
+                    .foregroundStyle(notification.type.color)
+            }
+            
+            // Content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(notification.title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                
+                Text(notification.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            
+            Spacer()
+            
+            Text(notification.timeAgo)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.gray.opacity(0.06))
+        )
     }
 }
 
@@ -401,6 +470,117 @@ struct ReminderCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.gray.opacity(0.06))
         )
+    }
+}
+
+// MARK: - Pending Request Card
+struct PendingRequestCard: View {
+    let request: PendingFriendRequest
+    let onAction: () -> Void
+    
+    @State private var isProcessing = false
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar
+            if let avatarDataStr = request.profile.avatar_data,
+               let data = Data(base64Encoded: avatarDataStr),
+               let uiImage = UIImage(data: data) {
+                 Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 44, height: 44)
+                    .clipShape(Circle())
+            } else {
+                 Circle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundStyle(.gray)
+                    )
+            }
+            
+            // Name
+            VStack(alignment: .leading, spacing: 4) {
+                Text(request.profile.username ?? "Unknown")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                Text("Đã gửi lời mời")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            // Actions
+            if isProcessing {
+                ProgressView()
+                    .frame(width: 44, height: 44)
+            } else {
+                HStack(spacing: 8) {
+                    Button(action: {
+                        handleDecline()
+                    }) {
+                        Text("Xóa")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.gray.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                    
+                    Button(action: {
+                        handleAccept()
+                    }) {
+                        Text("Chấp nhận")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.blue)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.red.opacity(0.05)) // Highlight with red tint
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                )
+        )
+    }
+    
+    private func handleAccept() {
+        isProcessing = true
+        Task {
+            do {
+                try await FriendService.shared.acceptFriendRequest(request.friendshipId)
+                await MainActor.run { onAction() }
+            } catch {
+                print("Accept error: \(error)")
+            }
+            await MainActor.run { isProcessing = false }
+        }
+    }
+    
+    private func handleDecline() {
+        isProcessing = true
+        Task {
+            do {
+                try await FriendService.shared.removeFriend(request.friendshipId)
+                await MainActor.run { onAction() }
+            } catch {
+                print("Decline error: \(error)")
+            }
+            await MainActor.run { isProcessing = false }
+        }
     }
 }
 

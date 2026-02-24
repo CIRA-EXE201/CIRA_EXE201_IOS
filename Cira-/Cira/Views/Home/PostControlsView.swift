@@ -25,6 +25,9 @@ struct PostControlsView: View {
     }
     
     private var isMyPost: Bool {
+        if post.author.username.lowercased() == "me" {
+            return true
+        }
         guard let currentUserStr = SupabaseManager.shared.currentUser?.id.uuidString,
               let currentUserId = UUID(uuidString: currentUserStr) else {
             return false

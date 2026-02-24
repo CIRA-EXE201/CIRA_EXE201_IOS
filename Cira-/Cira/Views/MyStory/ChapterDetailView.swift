@@ -8,6 +8,8 @@
 
 import SwiftUI
 import SwiftData
+import Supabase
+import Auth
 
 struct ChapterDetailView: View {
     let chapter: Chapter
@@ -114,6 +116,9 @@ struct ChapterDetailView: View {
     
     // MARK: - Generate Posts from Chapter Photos
     private func generateSamplePosts() -> [Post] {
+        let currentUserIdStr = SupabaseManager.shared.currentUser?.id.uuidString ?? UUID().uuidString
+        let currentUserId = UUID(uuidString: currentUserIdStr) ?? UUID()
+        
         return chapter.photos.map { photo in
             // Check if photo has voice note
             let voiceItem: Post.VoiceItem? = if let voice = photo.voiceNote {
@@ -138,7 +143,7 @@ struct ChapterDetailView: View {
                         voiceNote: voiceItem
                     )
                 ],
-                author: Post.Author(id: UUID(), username: "me", avatarURL: nil),
+                author: Post.Author(id: currentUserId, username: "me", avatarURL: nil),
                 createdAt: photo.createdAt,
                 likeCount: 0,
                 commentCount: 0,
