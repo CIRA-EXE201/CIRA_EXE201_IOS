@@ -24,37 +24,30 @@ struct AddFriendsView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Tab Selector
-                Picker("", selection: $selectedTab) {
-                    Text("Add Friends").tag(0)
-                    Text("Pending").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                
-                if selectedTab == 0 {
-                    addFriendsContent
-                } else {
-                    pendingRequestsContent
-                }
+        VStack(spacing: 0) {
+            // Tab Selector
+            Picker("", selection: $selectedTab) {
+                Text("Cộng Đồng").tag(0)
+                Text("Chờ Duyệt").tag(1)
             }
-            .background(Color.white)
-            .navigationTitle("Add Friends")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            
+            if selectedTab == 0 {
+                addFriendsContent
+            } else {
+                pendingRequestsContent
             }
-            .onAppear {
-                loadPendingRequests()
-            }
-            .sheet(isPresented: $showShareSheet) {
-                ShareSheet(items: [inviteLink])
-            }
+        }
+        .background(Color.white)
+        .navigationTitle("Bạn Bè")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            loadPendingRequests()
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: [inviteLink])
         }
     }
     

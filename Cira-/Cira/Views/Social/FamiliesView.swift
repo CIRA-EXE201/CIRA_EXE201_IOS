@@ -15,55 +15,53 @@ struct FamiliesView: View {
     @State private var showJoinFamily = false
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(UIColor.systemGray6).ignoresSafeArea() // Light grey background
-                
-                if isLoading {
-                    ProgressView("Đang tải danh sách Gia đình...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if families.isEmpty {
-                    emptyStateView
-                } else {
-                    familiesList
-                }
+        ZStack {
+            Color(UIColor.systemGray6).ignoresSafeArea() // Light grey background
+            
+            if isLoading {
+                ProgressView("Đang tải danh sách Gia đình...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if families.isEmpty {
+                emptyStateView
+            } else {
+                familiesList
             }
-            .navigationTitle("Gia đình")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(action: { showCreateFamily = true }) {
-                            Label("Tạo Gia đình mới", systemImage: "plus.circle")
-                        }
-                        Button(action: { showJoinFamily = true }) {
-                            Label("Tham gia bằng Mã", systemImage: "person.badge.key")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.headline)
-                            .foregroundColor(.black)
-                            .padding(8)
-                            .background(Color.black.opacity(0.06))
-                            .clipShape(Circle())
+        }
+        .navigationTitle("Gia đình")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button(action: { showCreateFamily = true }) {
+                        Label("Tạo Gia đình mới", systemImage: "plus.circle")
                     }
+                    Button(action: { showJoinFamily = true }) {
+                        Label("Tham gia bằng Mã", systemImage: "person.badge.key")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.headline)
+                        .foregroundColor(.black)
+                        .padding(8)
+                        .background(Color.black.opacity(0.06))
+                        .clipShape(Circle())
                 }
             }
-            .onAppear {
-                loadFamilies()
-            }
-            .sheet(isPresented: $showCreateFamily) {
-                CreateFamilyView(onCreated: { newFamily in
+        }
+        .onAppear {
+            loadFamilies()
+        }
+        .sheet(isPresented: $showCreateFamily) {
+            CreateFamilyView(onCreated: { newFamily in
+                families.insert(newFamily, at: 0)
+            })
+        }
+        .sheet(isPresented: $showJoinFamily) {
+            JoinFamilyView(onJoined: { newFamily in
+                if !families.contains(where: { $0.id == newFamily.id }) {
                     families.insert(newFamily, at: 0)
-                })
-            }
-            .sheet(isPresented: $showJoinFamily) {
-                JoinFamilyView(onJoined: { newFamily in
-                    if !families.contains(where: { $0.id == newFamily.id }) {
-                        families.insert(newFamily, at: 0)
-                    }
-                })
-            }
+                }
+            })
         }
     }
     
