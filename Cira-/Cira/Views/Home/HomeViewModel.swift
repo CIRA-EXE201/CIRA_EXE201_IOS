@@ -62,7 +62,7 @@ final class HomeViewModel: ObservableObject {
     @Published private var rawFeedPosts: [FeedPost] = []    // Raw social feed from Supabase
     private var currentConversionIndex = 0                  // Pagination tracker for display items
     private var isConvertingPosts = false                   // Prevent concurrent lazy load fetches
-    
+    @Published private(set) var isInitialLoading = true             // Track initial feed load
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var familyWalls: [FriendWall] = []
@@ -94,13 +94,17 @@ final class HomeViewModel: ObservableObject {
     
     // MARK: - Setup
     func setup(modelContext: ModelContext) {
-        // Prevent redundant setup on tab switch — show cached state instantly
         if hasSetup {
             Task {
                 // Perform a silent background sync to get any new updates
                 await SyncManager.shared.performFullSync()
-                loadLocalPosts()
+                await MainActor.run {
+                    self.loadLocalPosts()
+                }
                 await loadSocialFeed()
+                await MainActor.run {
+                    self.isInitialLoading = false
+                }
             }
             return
         }
@@ -121,6 +125,10 @@ final class HomeViewModel: ObservableObject {
         Task {
             // Load social feed from friends/family IMMEDIATELY
             await loadSocialFeed()
+            
+            await MainActor.run {
+                self.isInitialLoading = false
+            }
             
             // Start listening to realtime changes
             await RealtimeManager.shared.startListening()

@@ -37,7 +37,8 @@ struct HomeView: View {
             }
             
             GeometryReader { geometry in
-                let fullScreenSize = geometry.size
+                // Fix: freeze size to screen bounds so keyboard doesn't shrink the feed
+                let fullScreenSize = UIScreen.main.bounds.size
                 let safeArea = globalSafeArea // Use captured safe area
                 
                 // RIGHT: Main Content Stack
@@ -66,6 +67,7 @@ struct HomeView: View {
                                 } controls: {
                                     PostControlsView(
                                         post: post,
+                                        isQuickReplyFocused: isQuickReplyFocused && quickReplyPost?.id == post.id,
                                         onLikeToggle: { postId in
                                             viewModel.toggleLike(for: postId)
                                         },
@@ -100,9 +102,9 @@ struct HomeView: View {
                     }
                     .allowsHitTesting(true)
                 }
-                .frame(width: fullScreenSize.width)
+                .frame(width: fullScreenSize.width, height: fullScreenSize.height, alignment: .top)
             }
-            .ignoresSafeArea()
+            .ignoresSafeArea(.all, edges: .all)
             .onAppear {
                 viewModel.setup(modelContext: modelContext)
             }
@@ -111,6 +113,35 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showSocialHub) {
                 SocialHubView()
+            }
+            
+            // E. Initial Loading Overlay
+            if viewModel.isInitialLoading {
+                ZStack {
+                    Color.white.ignoresSafeArea()
+                    
+                    VStack(spacing: 32) {
+                        Spacer()
+                        
+                        Image("Logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 180, height: 180)
+                        
+                        Text("Preserve memories with your voice")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        
+                        Spacer()
+                        
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                        
+                        Spacer().frame(height: 40)
+                    }
+                }
+                .zIndex(100)
+                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
             }
             
             // D. Quick Reply Overlay
@@ -159,11 +190,12 @@ struct HomeView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.white.opacity(0.15)))
+                        .background(Capsule().fill(Color(white: 0.15))) // Dark gray / xám đen
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
                     }
                 }
+                .ignoresSafeArea(.keyboard, edges: []) // Let this ZStack be pushed up by keyboard
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.2), value: isQuickReplyFocused)
             }

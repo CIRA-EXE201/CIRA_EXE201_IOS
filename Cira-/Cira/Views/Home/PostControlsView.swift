@@ -13,10 +13,12 @@ struct PostControlsView: View {
     @State private var likeCount: Int
     @State private var commentCount: Int
     @State private var isLiking = false
+    let isQuickReplyFocused: Bool
     let onReplyTap: () -> Void
     
-    init(post: Post, onLikeToggle: @escaping (UUID) -> Void, onReplyTap: @escaping () -> Void) {
+    init(post: Post, isQuickReplyFocused: Bool = false, onLikeToggle: @escaping (UUID) -> Void, onReplyTap: @escaping () -> Void) {
         self.post = post
+        self.isQuickReplyFocused = isQuickReplyFocused
         self.onLikeToggle = onLikeToggle
         self.onReplyTap = onReplyTap
         _isLiked = State(initialValue: post.isLiked)
@@ -84,6 +86,7 @@ struct PostControlsView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .opacity(isQuickReplyFocused ? 0 : 1)
                     
                     // Reactions
                     HStack(spacing: 16) {
