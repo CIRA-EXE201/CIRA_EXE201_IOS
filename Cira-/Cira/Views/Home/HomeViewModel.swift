@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import SwiftData
 import Combine
+import Auth
 
 // MARK: - Wall Category
 enum WallCategory: String, CaseIterable {
@@ -57,7 +58,11 @@ struct FriendWall: Identifiable {
 final class HomeViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published private(set) var posts: [Post] = []          // Local SwiftData posts (yours)
-    @Published private(set) var feedPosts: [Post] = []      // Social feed from friends/family
+    @Published private(set) var feedPosts: [Post] = []      // Social feed from friends/family display items
+    @Published private var rawFeedPosts: [FeedPost] = []    // Raw social feed from Supabase
+    private var currentConversionIndex = 0                  // Pagination tracker for display items
+    private var isConvertingPosts = false                   // Prevent concurrent lazy load fetches
+    
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var familyWalls: [FriendWall] = []
@@ -114,17 +119,19 @@ final class HomeViewModel: ObservableObject {
         
         // Then load everything from network
         Task {
-            // Sync local data with Supabase
-            await SyncManager.shared.performFullSync()
-            
-            // Reload local data after sync
-            loadLocalPosts()
-            
-            // Load social feed from friends/family
+            // Load social feed from friends/family IMMEDIATELY
             await loadSocialFeed()
             
             // Start listening to realtime changes
             await RealtimeManager.shared.startListening()
+            
+            // Sync local data with Supabase in background without blocking UI
+            Task.detached {
+                await SyncManager.shared.performFullSync()
+                await MainActor.run {
+                    self.loadLocalPosts()
+                }
+            }
         }
         
         // Listen to realtime updates via NotificationCenter
@@ -154,13 +161,15 @@ final class HomeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
             
-        // Listen for new post inserts (including friends' posts) — refresh feed
+        // Listen for new post inserts (including friends' posts) — refresh feed silently
         NotificationCenter.default.publisher(for: .postInserted)
             .receive(on: RunLoop.main)
-            .debounce(for: .seconds(1), scheduler: RunLoop.main)
-            .sink { [weak self] _ in
-                Task { [weak self] in
-                    await self?.loadSocialFeed()
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let dto = notification.object as? PostDTO else { return }
+                
+                Task {
+                    await self.handleNewRealtimePost(dto: dto)
                 }
             }
             .store(in: &cancellables)
@@ -232,36 +241,78 @@ final class HomeViewModel: ObservableObject {
     @MainActor
     func loadSocialFeed() async {
         do {
+            // Fetch raw feed metadata instantly
             let socialFeed = try await FeedService.shared.fetchSimpleFeed(limit: 50)
             
-            // Convert FeedPost to Post for display (async for signed URLs)
-            var displayPosts: [Post] = []
-            for feedPost in socialFeed {
-                let post = await FeedService.shared.convertToDisplayPost(feedPost: feedPost)
-                displayPosts.append(post)
-            }
+            self.rawFeedPosts = socialFeed
+            self.feedPosts = []
+            self.currentConversionIndex = 0
             
-            // Try to set isLiked correctly using fetchLikedPostIds
-            if let likedIds = try? await LikeService.shared.fetchLikedPostIds() {
-                displayPosts = displayPosts.map { post in
-                    var p = post
-                    p.isLiked = likedIds.contains(p.id)
-                    return p
-                }
-                
-                // Also update local `posts` since they might have been loaded earlier as false
-                self.posts = self.posts.map { post in
-                    var p = post
-                    p.isLiked = likedIds.contains(p.id)
-                    return p
-                }
-            }
+            // Rapidly convert just the first 3 items to show the UI instantly
+            await loadMoreSocialPosts(count: 3)
             
-            self.feedPosts = displayPosts
-            print("✅ Loaded \(feedPosts.count) posts from social feed")
+            print("✅ Pre-loaded raw feed. Displaying first batch.")
         } catch {
             print("❌ Failed to load social feed: \(error)")
             self.errorMessage = "Failed to load feed: \(error.localizedDescription)"
+        }
+    }
+    
+    // MARK: - Lazy Loading Social Posts
+    @MainActor
+    func loadMoreSocialPosts(count: Int) async {
+        guard !isConvertingPosts else { return }
+        
+        let startIndex = currentConversionIndex
+        let endIndex = min(startIndex + count, rawFeedPosts.count)
+        
+        guard startIndex < endIndex else { return } // No more posts to convert
+        
+        isConvertingPosts = true
+        let sliceToConvert = rawFeedPosts[startIndex..<endIndex]
+        
+        // Convert incrementally (request Signed URLs)
+        var newDisplayPosts: [Post] = []
+        for feedPost in sliceToConvert {
+            let post = await FeedService.shared.convertToDisplayPost(feedPost: feedPost)
+            newDisplayPosts.append(post)
+        }
+        
+        // Update isLiked status for these new posts
+        if let likedIds = try? await LikeService.shared.fetchLikedPostIds() {
+            newDisplayPosts = newDisplayPosts.map { post in
+                var p = post
+                p.isLiked = likedIds.contains(p.id)
+                return p
+            }
+            
+            // Sync local `posts` since they might have been loaded earlier as false
+            self.posts = self.posts.map { post in
+                var p = post
+                p.isLiked = likedIds.contains(p.id)
+                return p
+            }
+        }
+        
+        self.feedPosts.append(contentsOf: newDisplayPosts)
+        self.currentConversionIndex = endIndex
+        self.isConvertingPosts = false
+    }
+    
+    // Trigger from view when scrolling
+    @MainActor
+    func loadMoreIfNeeded(currentPost: Post) {
+        guard !isConvertingPosts else { return }
+        
+        // Check if we are near the bottom of all visible posts (e.g. 1 index away from end)
+        let combined = self.combinedPosts
+        if let index = combined.firstIndex(where: { $0.id == currentPost.id }) {
+            if index >= combined.count - 2 {
+                // User is near the bottom, load the next 2 posts
+                Task {
+                    await loadMoreSocialPosts(count: 2)
+                }
+            }
         }
     }
     
@@ -364,5 +415,57 @@ final class HomeViewModel: ObservableObject {
     private func removePost(id: UUID) {
         posts.removeAll(where: { $0.id == id })
         feedPosts.removeAll(where: { $0.id == id })
+        rawFeedPosts.removeAll(where: { $0.id == id })
+        // Decrement conversion index if we removed a post that was already converted
+        if currentConversionIndex > 0 {
+            currentConversionIndex -= 1
+        }
+    }
+    
+    @MainActor
+    private func handleNewRealtimePost(dto: PostDTO) async {
+        // Skip if it is our own post, local DB already has it
+        if dto.owner_id == SupabaseManager.shared.currentUser?.id.uuidString { return }
+        
+        // Prevent duplicate append if it somehow already exists
+        guard let uuid = UUID(uuidString: dto.id), !rawFeedPosts.contains(where: { $0.id == uuid }) else { return }
+        
+        // Create raw feed post structure
+        var profileUsername: String?
+        var profileAvatar: String?
+        
+        // Fetch author info to build FeedPost
+        if let authorId = UUID(uuidString: dto.owner_id) {
+            if let profile = try? await FriendService.shared.getFriends().first(where: { $0.id == authorId }) {
+                profileUsername = profile.username
+                profileAvatar = profile.avatar_data
+            }
+        }
+        
+        let rawPost = FeedPost(
+            id: uuid,
+            owner_id: UUID(uuidString: dto.owner_id) ?? UUID(),
+            image_path: dto.image_path,
+            live_photo_path: dto.live_photo_path,
+            message: dto.message,
+            voice_url: dto.voice_url,
+            voice_duration: dto.voice_duration,
+            visibility: dto.visibility ?? "friends",
+            created_at: dto.created_at ?? "",
+            updated_at: dto.updated_at,
+            like_count: dto.like_count,
+            comment_count: dto.comment_count,
+            is_liked: false,
+            author_username: profileUsername,
+            author_avatar_data: profileAvatar
+        )
+        
+        // 1. Insert into raw feeds
+        rawFeedPosts.insert(rawPost, at: 0)
+        currentConversionIndex += 1
+        
+        // 2. Convert and instantly display at the top
+        let displayPost = await FeedService.shared.convertToDisplayPost(feedPost: rawPost)
+        feedPosts.insert(displayPost, at: 0)
     }
 }

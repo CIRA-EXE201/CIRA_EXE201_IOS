@@ -40,6 +40,24 @@ struct FeedPost: Codable, Identifiable {
         let avatar_data: String?
     }
     
+    init(id: UUID, owner_id: UUID, image_path: String? = nil, live_photo_path: String? = nil, message: String? = nil, voice_url: String? = nil, voice_duration: Double? = nil, visibility: String, created_at: String, updated_at: String? = nil, like_count: Int? = 0, comment_count: Int? = 0, is_liked: Bool? = false, author_username: String? = nil, author_avatar_data: String? = nil) {
+        self.id = id
+        self.owner_id = owner_id
+        self.image_path = image_path
+        self.live_photo_path = live_photo_path
+        self.message = message
+        self.voice_url = voice_url
+        self.voice_duration = voice_duration
+        self.visibility = visibility
+        self.created_at = created_at
+        self.updated_at = updated_at
+        self.like_count = like_count
+        self.comment_count = comment_count
+        self.is_liked = is_liked
+        self.author_username = author_username
+        self.author_avatar_data = author_avatar_data
+    }
+    
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)

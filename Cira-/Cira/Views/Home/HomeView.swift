@@ -78,6 +78,9 @@ struct HomeView: View {
                                 }
                                 .containerRelativeFrame(.vertical)
                                 .id(post.id.uuidString)
+                                .onAppear {
+                                    viewModel.loadMoreIfNeeded(currentPost: post)
+                                }
                             }
                         }
                         .scrollTargetLayout()
@@ -96,61 +99,6 @@ struct HomeView: View {
                         Spacer()
                     }
                     .allowsHitTesting(true)
-                    
-                    // D. Quick Reply Overlay
-                    if let post = quickReplyPost {
-                        ZStack {
-                            // Dark ambient gradient background
-                            LinearGradient(
-                                colors: [.black.opacity(0.8), .black.opacity(0.4), .clear],
-                                startPoint: .bottom,
-                                endPoint: .center
-                            )
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                isQuickReplyFocused = false
-                                quickReplyPost = nil
-                            }
-                            
-                            VStack {
-                                Spacer()
-                                
-                                HStack(spacing: 8) {
-                                    TextField("Trả lời \(post.author.username)...", text: $quickReplyText)
-                                        .focused($isQuickReplyFocused)
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(.white)
-                                        .tint(.white)
-                                        .submitLabel(.send)
-                                        .onSubmit {
-                                            sendQuickReply()
-                                        }
-                                    
-                                    Button(action: {
-                                        sendQuickReply()
-                                    }) {
-                                        if isSendingReply {
-                                            ProgressView()
-                                                .tint(.white)
-                                                .frame(width: 28, height: 28)
-                                        } else {
-                                            Image(systemName: "arrow.up.circle.fill")
-                                                .font(.system(size: 28))
-                                                .foregroundStyle(quickReplyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.3) : .white)
-                                        }
-                                    }
-                                    .disabled(quickReplyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSendingReply)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(Capsule().fill(Color.white.opacity(0.15)))
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 8)
-                            }
-                        }
-                        .transition(.opacity)
-                        .animation(.easeInOut(duration: 0.2), value: isQuickReplyFocused)
-                    }
                 }
                 .frame(width: fullScreenSize.width)
             }
@@ -164,13 +112,68 @@ struct HomeView: View {
             .sheet(isPresented: $showSocialHub) {
                 SocialHubView()
             }
-            .onChange(of: isQuickReplyFocused) { _, isFocused in
-                if !isFocused {
-                    // Slight delay to allow keyboard animation to finish before removing view
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        if !self.isQuickReplyFocused {
-                            self.quickReplyPost = nil
+            
+            // D. Quick Reply Overlay
+            if let post = quickReplyPost {
+                ZStack {
+                    // Dark ambient gradient background
+                    LinearGradient(
+                        colors: [.black.opacity(0.8), .black.opacity(0.4), .clear],
+                        startPoint: .bottom,
+                        endPoint: .center
+                    )
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        isQuickReplyFocused = false
+                        quickReplyPost = nil
+                    }
+                    
+                    VStack {
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            TextField("Trả lời \(post.author.username)...", text: $quickReplyText)
+                                .focused($isQuickReplyFocused)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                                .tint(.white)
+                                .submitLabel(.send)
+                                .onSubmit {
+                                    sendQuickReply()
+                                }
+                            
+                            Button(action: {
+                                sendQuickReply()
+                            }) {
+                                if isSendingReply {
+                                    ProgressView()
+                                        .tint(.white)
+                                        .frame(width: 28, height: 28)
+                                } else {
+                                    Image(systemName: "arrow.up.circle.fill")
+                                        .font(.system(size: 28))
+                                        .foregroundStyle(quickReplyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white.opacity(0.3) : .white)
+                                }
+                            }
+                            .disabled(quickReplyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSendingReply)
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.white.opacity(0.15)))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                    }
+                }
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: isQuickReplyFocused)
+            }
+        }
+        .onChange(of: isQuickReplyFocused) { _, isFocused in
+            if !isFocused {
+                // Slight delay to allow keyboard animation to finish before removing view
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if !self.isQuickReplyFocused {
+                        self.quickReplyPost = nil
                     }
                 }
             }
