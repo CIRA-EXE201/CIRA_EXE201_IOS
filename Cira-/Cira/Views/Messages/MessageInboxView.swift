@@ -54,6 +54,11 @@ struct MessageInboxView: View {
             .task {
                 await loadConversations()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .messageReceived)) { _ in
+                Task {
+                    await loadConversations()
+                }
+            }
         }
     }
     

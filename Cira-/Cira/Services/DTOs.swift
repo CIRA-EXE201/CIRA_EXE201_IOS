@@ -17,6 +17,14 @@ struct PostDTO: Codable {
     
     var like_count: Int?
     var comment_count: Int?
+    
+    // Join data
+    var profiles: ProfileData?
+    
+    struct ProfileData: Codable {
+        let username: String?
+        let avatar_data: String?
+    }
 }
 
 // MARK: - Chapter DTO for Supabase

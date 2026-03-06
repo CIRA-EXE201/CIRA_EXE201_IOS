@@ -30,6 +30,7 @@ final class RealtimeManager: ObservableObject {
     private var modelContext: ModelContext?
     private var chaptersChannel: RealtimeChannelV2?
     private var postsChannel: RealtimeChannelV2?
+    private var messagesChannel: RealtimeChannelV2?
     private var cancellables = Set<AnyCancellable>()
     
     private init() {}
@@ -53,6 +54,12 @@ final class RealtimeManager: ObservableObject {
         
         // Subscribe to posts changes
         await subscribeToPosts(userId: userId)
+        
+        // Subscribe to messages changes
+        await subscribeToMessages(userId: userId)
+        
+        // Subscribe to friendship changes (accept/remove)
+        await subscribeToFriendships(userId: userId)
         
         isConnected = true
     }
@@ -103,6 +110,31 @@ final class RealtimeManager: ObservableObject {
         }
         
         print("✅ [Realtime] Subscribed to posts")
+    }
+    
+    // MARK: - Subscribe to Messages
+    private func subscribeToMessages(userId: String) async {
+        let client = SupabaseManager.shared.client
+        
+        messagesChannel = client.realtimeV2.channel("direct_messages_\(userId)")
+        
+        // Supabase Realtime does NOT support compound or=() filters.
+        // Subscribe without filter and check sender/receiver in handleMessageChange.
+        let changes = messagesChannel!.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "direct_messages"
+        )
+        
+        await messagesChannel!.subscribe()
+        
+        Task {
+            for await change in changes {
+                await handleMessageChange(change)
+            }
+        }
+        
+        print("✅ [Realtime] Subscribed to messages")
     }
     
     // MARK: - Handle Chapter Changes from Server
@@ -189,6 +221,35 @@ final class RealtimeManager: ObservableObject {
         }
         
         lastSyncTime = Date()
+    }
+    
+    // MARK: - Handle Message Changes from Server
+    private func handleMessageChange(_ change: AnyAction) async {
+        guard let currentUserId = SupabaseManager.shared.currentUser?.id.uuidString else { return }
+        
+        do {
+            switch change {
+            case .insert(let action):
+                let data = try JSONEncoder().encode(action.record)
+                let message = try JSONDecoder().decode(DirectMessage.self, from: data)
+                
+                // Only process messages that involve the current user
+                guard message.sender_id.uuidString == currentUserId
+                   || message.receiver_id.uuidString == currentUserId else {
+                    return
+                }
+                
+                print("📩 [Realtime] New message received: \(message.content)")
+                
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .messageReceived, object: message)
+                }
+            default:
+                break
+            }
+        } catch {
+            print("❌ [Realtime] Failed to decode message change: \(error)")
+        }
     }
     
     // MARK: - Insert Chapter from Remote
@@ -322,6 +383,76 @@ final class RealtimeManager: ObservableObject {
         }
     }
     
+    // MARK: - Subscribe to Friendships
+    private var friendshipsChannel: RealtimeChannelV2?
+    
+    private func subscribeToFriendships(userId: String) async {
+        let client = SupabaseManager.shared.client
+        
+        friendshipsChannel = client.realtimeV2.channel("friendships_\(userId)")
+        
+        // Supabase Realtime doesn't support compound or= filters.
+        // Subscribe without filter and check in handler.
+        let changes = friendshipsChannel!.postgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "friendships"
+        )
+        
+        await friendshipsChannel!.subscribe()
+        
+        Task {
+            for await change in changes {
+                await handleFriendshipChange(change, userId: userId)
+            }
+        }
+        
+        print("✅ [Realtime] Subscribed to friendships")
+    }
+    
+    // MARK: - Handle Friendship Changes
+    private func handleFriendshipChange(_ change: AnyAction, userId: String) async {
+        // Helper to process friendship record data
+        func processFriendshipRecord(_ data: Data) throws {
+            let friendship = try JSONDecoder().decode(Friendship.self, from: data)
+            
+            // Only process if this friendship involves the current user
+            guard friendship.requester_id.uuidString == userId
+               || friendship.addressee_id.uuidString == userId else {
+                return
+            }
+            
+            print("👥 [Realtime] Friendship change: \(friendship.status)")
+            
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .friendListUpdated, object: nil)
+            }
+        }
+        
+        do {
+            switch change {
+            case .insert(let action):
+                let data = try JSONEncoder().encode(action.record)
+                try processFriendshipRecord(data)
+                
+            case .update(let action):
+                let data = try JSONEncoder().encode(action.record)
+                try processFriendshipRecord(data)
+                
+            case .delete(_):
+                // Friend removed — reload friend list
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .friendListUpdated, object: nil)
+                }
+                
+            default:
+                break
+            }
+        } catch {
+            print("❌ [Realtime] Failed to decode friendship change: \(error)")
+        }
+    }
+    
     // MARK: - Stop Listening
     func stopListening() async {
         if let channel = chaptersChannel {
@@ -330,9 +461,17 @@ final class RealtimeManager: ObservableObject {
         if let channel = postsChannel {
             await channel.unsubscribe()
         }
+        if let channel = messagesChannel {
+            await channel.unsubscribe()
+        }
+        if let channel = friendshipsChannel {
+            await channel.unsubscribe()
+        }
         
         chaptersChannel = nil
         postsChannel = nil
+        messagesChannel = nil
+        friendshipsChannel = nil
         isConnected = false
         
         print("🔌 [Realtime] Disconnected from realtime")

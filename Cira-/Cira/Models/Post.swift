@@ -35,6 +35,7 @@ struct Post: Identifiable {
         let id: UUID
         let imageURL: URL?
         let imageData: Data?
+        let remoteImagePath: String?
         let livePhotoMoviePath: String?
         let voiceNote: VoiceItem?
         
@@ -52,10 +53,11 @@ struct Post: Identifiable {
             return documentsPath?.appendingPathComponent(path)
         }
         
-        init(id: UUID, imageURL: URL?, imageData: Data?, livePhotoMoviePath: String? = nil, voiceNote: VoiceItem?) {
+        init(id: UUID, imageURL: URL?, imageData: Data?, remoteImagePath: String? = nil, livePhotoMoviePath: String? = nil, voiceNote: VoiceItem?) {
             self.id = id
             self.imageURL = imageURL
             self.imageData = imageData
+            self.remoteImagePath = remoteImagePath
             self.livePhotoMoviePath = livePhotoMoviePath
             self.voiceNote = voiceNote
         }

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVKit
+import Supabase
 
 struct PostCardView: View {
     let post: Post
@@ -17,6 +18,10 @@ struct PostCardView: View {
     @State private var currentPhotoIndex = 0
     @State private var isPlayingLivePhoto = false
     @State private var isPlayingVoice = false
+    
+    // Signed URL lazy loading
+    @State private var signedImageURLs: [UUID: URL] = [:]
+    @State private var fetchingImageIDs = Set<UUID>()
     
     // Corner radius constant
     private let cornerRadius: CGFloat = 36
@@ -105,7 +110,7 @@ struct PostCardView: View {
                     LivePhotoVideoPlayer(videoURL: movieURL, isPlaying: $isPlayingLivePhoto)
                         .frame(width: cardWidth, height: cardHeight)
                 }
-            } else if let imageURL = photo.imageURL {
+            } else if let imageURL = (photo.imageURL ?? signedImageURLs[photo.id]) {
                 AsyncImage(url: imageURL) { phase in
                     if let image = phase.image {
                         image
@@ -120,6 +125,19 @@ struct PostCardView: View {
                             .overlay(ProgressView())
                     }
                 }
+            } else if let remotePath = photo.remoteImagePath {
+                Color.black.opacity(0.1)
+                    .frame(width: cardWidth, height: cardHeight)
+                    .overlay(ProgressView())
+                    .task {
+                        guard !fetchingImageIDs.contains(photo.id) else { return }
+                        fetchingImageIDs.insert(photo.id)
+                        if let url = try? await SupabaseManager.shared.client.storage.from("photos").createSignedURL(path: remotePath, expiresIn: 3600) {
+                            await MainActor.run {
+                                self.signedImageURLs[photo.id] = url
+                            }
+                        }
+                    }
             } else {
                 placeholderLayer
             }

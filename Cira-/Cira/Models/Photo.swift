@@ -25,6 +25,12 @@ final class Photo {
     var message: String?
     var livePhotoMoviePath: String?
     
+    // Offline Cache Info for Friend Posts
+    var ownerId: String?
+    var authorUsername: String?
+    var authorAvatarData: String?
+    var remoteImagePath: String?
+    
     // Store as String for SwiftData compatibility
     var syncStatusRaw: String = SyncStatus.pending.rawValue
     

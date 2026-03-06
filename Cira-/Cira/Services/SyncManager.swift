@@ -31,6 +31,16 @@ final class SyncManager: ObservableObject {
     
     private init() {
         startMonitoring()
+        
+        NotificationCenter.default.addObserver(
+            forName: .newPostSaved,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task {
+                await self?.performFullSync()
+            }
+        }
     }
     
     // MARK: - Setup
@@ -102,12 +112,28 @@ final class SyncManager: ObservableObject {
         defer { isSyncing = false }
         
         print("🔄 Starting Full Sync...")
-        await repairIncompleteUploads() // Fix broken syncs first
-        await syncPendingPosts() // Upload posts
-        await syncPendingChapters() // Upload chapters
-        await syncDown()         // Download posts
-        await syncDownChapters() // Download chapters
+        
+        // Only run expensive repair + upload when there are pending posts
+        if await hasPendingPosts() {
+            await repairIncompleteUploads()
+            await syncPendingPosts()
+        }
+        
+        await syncPendingChapters()
+        await syncDown()
+        await syncDownChapters()
         print("🔄 Full Sync Complete!")
+    }
+    
+    // MARK: - Quick Pending Check
+    private func hasPendingPosts() async -> Bool {
+        guard let modelContext = modelContext else { return false }
+        let pendingRaw = SyncStatus.pending.rawValue
+        let failedRaw = SyncStatus.failed.rawValue
+        let descriptor = FetchDescriptor<Photo>(
+            predicate: #Predicate { $0.syncStatusRaw == pendingRaw || $0.syncStatusRaw == failedRaw }
+        )
+        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
     
     // MARK: - Repair Incomplete Uploads
@@ -331,8 +357,8 @@ final class SyncManager: ObservableObject {
         }
         
         do {
-            // 1. Fetch Remote Posts (Delta or Full)
-            let remotePosts: [PostDTO] = try await SupabaseManager.shared.fetchUserPosts(userId: userId, after: lastSync)
+            // 1. Fetch Remote Posts (Delta or Full - ALL visible posts, including friends)
+            let remotePosts: [PostDTO] = try await SupabaseManager.shared.fetchAllVisiblePosts(after: lastSync)
             print("📥 Found \(remotePosts.count) new/updated remote posts")
             
             if remotePosts.isEmpty {
@@ -444,33 +470,47 @@ final class SyncManager: ObservableObject {
         }
         
         do {
-            // 1. Download Image
-            let imageData = try await SupabaseManager.shared.downloadFile(bucket: "photos", path: imagePath)
+            // 1. Download Image (Only for own posts)
+            let isOwnPost = dto.owner_id == SupabaseManager.shared.currentUser?.id.uuidString
+            var imageData: Data? = nil
+            if isOwnPost {
+                imageData = try? await SupabaseManager.shared.downloadFile(bucket: "photos", path: imagePath)
+            }
             
             let photo = Photo(imageData: imageData)
+            photo.remoteImagePath = imagePath
             photo.id = UUID(uuidString: dto.id) ?? UUID()
             photo.message = dto.message
             photo.createdAt = ISO8601DateFormatter().date(from: dto.created_at) ?? Date()
             photo.syncStatus = .synced // It's from server, so it's synced
             
+            // Set offline cache info
+            photo.ownerId = dto.owner_id
+            photo.authorUsername = dto.profiles?.username
+            photo.authorAvatarData = dto.profiles?.avatar_data
+            
             // 2. Download Voice (Optional)
             if let voiceUrlStr = dto.voice_url, !voiceUrlStr.isEmpty {
-                 // voice_url might be a full URL or path. Assuming public URL or path?
-                 // Current uploadAudio returns absoluteString.
-                 // We need to download content from URL.
-                 if let url = URL(string: voiceUrlStr) {
-                     let (data, _) = try await URLSession.shared.data(from: url)
-                     
-                     // Save to local file
-                     let fileName = "voice_\(photo.id.uuidString).m4a"
-                     let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                     let destinationURL = documentsPath.appendingPathComponent(fileName)
-                     try data.write(to: destinationURL)
-                     
-                     let duration = dto.voice_duration ?? 0
-                     let voiceNote = VoiceNote(audioFileName: fileName, duration: duration)
-                     photo.voiceNote = voiceNote
-                     modelContext?.insert(voiceNote)
+                 var finalURL: URL? = URL(string: voiceUrlStr)
+                 if !voiceUrlStr.starts(with: "http") {
+                     finalURL = try? await SupabaseManager.shared.client.storage
+                         .from("audios")
+                         .createSignedURL(path: voiceUrlStr, expiresIn: 3600)
+                 }
+                 
+                 if let url = finalURL {
+                     if let (data, _) = try? await URLSession.shared.data(from: url) {
+                         // Save to local file
+                         let fileName = "voice_\(photo.id.uuidString).m4a"
+                         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                         let destinationURL = documentsPath.appendingPathComponent(fileName)
+                         try? data.write(to: destinationURL)
+                         
+                         let duration = dto.voice_duration ?? 0
+                         let voiceNote = VoiceNote(audioFileName: fileName, duration: duration)
+                         photo.voiceNote = voiceNote
+                         modelContext?.insert(voiceNote)
+                     }
                  }
             }
             

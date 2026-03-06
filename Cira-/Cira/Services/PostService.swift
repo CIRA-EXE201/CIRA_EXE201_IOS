@@ -107,16 +107,34 @@ final class PostService {
 
     
     // MARK: - Fetch All Posts
-    func fetchPosts(modelContext: ModelContext) -> [Photo] {
+    // MARK: - Fetch All Posts (For Home Feed)
+    func fetchAllPosts(modelContext: ModelContext) -> [Photo] {
         let descriptor = FetchDescriptor<Photo>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         
         do {
-            let photos = try modelContext.fetch(descriptor)
-            return photos
+            return try modelContext.fetch(descriptor)
         } catch {
-            print("Failed to fetch posts: \(error)")
+            print("Failed to fetch all posts: \(error)")
+            return []
+        }
+    }
+    
+    // MARK: - Fetch My Posts (For Profile/Story)
+    func fetchMyPosts(modelContext: ModelContext, currentUserId: String) -> [Photo] {
+        let descriptor = FetchDescriptor<Photo>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        // Note: SwiftData predicate with optional String equality can be tricky, 
+        // so we filter in memory for safety if the dataset isn't huge, 
+        // or we use a safe predicate. For now, filter in memory is safer for optional Strings.
+        
+        do {
+            let all = try modelContext.fetch(descriptor)
+            return all.filter { $0.ownerId == nil || $0.ownerId == currentUserId || $0.ownerId == "" }
+        } catch {
+            print("Failed to fetch my posts: \(error)")
             return []
         }
     }
@@ -137,6 +155,7 @@ final class PostService {
             id: photo.id,
             imageURL: nil,
             imageData: photo.imageData,
+            remoteImagePath: photo.remoteImagePath,
             livePhotoMoviePath: photo.livePhotoMoviePath,
             voiceNote: voiceItem
         )
@@ -144,11 +163,24 @@ final class PostService {
         let currentUserIdStr = SupabaseManager.shared.currentUser?.id.uuidString ?? UUID().uuidString
         let currentUserId = UUID(uuidString: currentUserIdStr) ?? UUID()
         
+        let authorIdStr = photo.ownerId ?? currentUserIdStr
+        let authorId = UUID(uuidString: authorIdStr) ?? currentUserId
+        
+        // If it's my post, authorUsername logic
+        var username = "Me"
+        if let photoUsername = photo.authorUsername, !photoUsername.isEmpty {
+            username = photoUsername
+        } else if authorIdStr != currentUserIdStr {
+            username = "Friend"
+        }
+        
+        let avatarURL = photo.authorAvatarData != nil ? URL(string: "data:image/jpeg;base64,\(photo.authorAvatarData!)") : nil
+        
         return Post(
             id: photo.id,
             type: .single,
             photos: [photoItem],
-            author: Post.Author(id: currentUserId, username: "Me", avatarURL: nil),
+            author: Post.Author(id: authorId, username: username, avatarURL: avatarURL),
             createdAt: photo.createdAt,
             likeCount: 0,
             commentCount: 0,

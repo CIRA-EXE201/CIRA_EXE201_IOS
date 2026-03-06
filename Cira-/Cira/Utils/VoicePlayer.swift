@@ -29,25 +29,70 @@ class VoicePlayer: NSObject, ObservableObject {
         stop()
         currentURL = url
         
-        do {
-            audioPlayer = try AVAudioPlayer(contentsOf: url)
-            audioPlayer?.delegate = self
-            audioPlayer?.prepareToPlay()
-            duration = audioPlayer?.duration ?? 0
-        } catch {
-            print("❌ Failed to load audio: \(error)")
-            errorMessage = "Cannot load audio"
+        if url.isFileURL {
+            do {
+                audioPlayer = try AVAudioPlayer(contentsOf: url)
+                setupPlayer()
+            } catch {
+                print("❌ Failed to load local audio: \(error)")
+                self.errorMessage = "Cannot load local audio"
+            }
+        } else {
+            // Download audio data asynchronously
+            Task {
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    await MainActor.run {
+                        // Check if the URL hasn't changed while downloading
+                        guard self.currentURL == url else { return }
+                        
+                        do {
+                            self.audioPlayer = try AVAudioPlayer(data: data)
+                            self.setupPlayer()
+                            
+                            // Auto-play if play was pressed while loading
+                            if self.isPlaying {
+                                self.playFromSession()
+                            }
+                        } catch {
+                            print("❌ Failed to play downloaded audio data: \(error)")
+                            self.errorMessage = "Cannot play downloaded audio"
+                            self.isPlaying = false
+                        }
+                    }
+                } catch {
+                    await MainActor.run {
+                        guard self.currentURL == url else { return }
+                        print("❌ Failed to download audio URL: \(error)")
+                        self.errorMessage = "Cannot download audio"
+                        self.isPlaying = false
+                    }
+                }
+            }
         }
+    }
+    
+    private func setupPlayer() {
+        audioPlayer?.delegate = self
+        audioPlayer?.prepareToPlay()
+        duration = audioPlayer?.duration ?? 0
     }
     
     // MARK: - Play
     func play() {
-        guard let player = audioPlayer else {
+        if audioPlayer == nil {
+            isPlaying = true // Indicate intent to play once loaded
             if let url = currentURL {
                 load(url: url)
             }
             return
         }
+        
+        playFromSession()
+    }
+    
+    private func playFromSession() {
+        guard let player = audioPlayer else { return }
         
         // Configure audio session
         do {
@@ -63,6 +108,7 @@ class VoicePlayer: NSObject, ObservableObject {
         isPlaying = true
         
         // Start progress timer
+        playbackTimer?.invalidate()
         playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self, let player = self.audioPlayer, player.duration > 0 else { return }

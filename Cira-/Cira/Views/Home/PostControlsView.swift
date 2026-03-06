@@ -9,15 +9,16 @@ struct PostControlsView: View {
     let onLikeToggle: (UUID) -> Void
     
     @State private var isShowingComments = false
-    @State private var isShowingSendMessage = false
     @State private var isLiked: Bool
     @State private var likeCount: Int
     @State private var commentCount: Int
     @State private var isLiking = false
+    let onReplyTap: () -> Void
     
-    init(post: Post, onLikeToggle: @escaping (UUID) -> Void) {
+    init(post: Post, onLikeToggle: @escaping (UUID) -> Void, onReplyTap: @escaping () -> Void) {
         self.post = post
         self.onLikeToggle = onLikeToggle
+        self.onReplyTap = onReplyTap
         _isLiked = State(initialValue: post.isLiked)
         _likeCount = State(initialValue: post.likeCount)
         _commentCount = State(initialValue: post.commentCount)
@@ -67,9 +68,9 @@ struct PostControlsView: View {
                 // Interaction Bar (Input + Icons)
                 HStack(spacing: 12) {
                     // Message Input
-                    Button(action: { isShowingSendMessage = true }) {
+                    Button(action: { onReplyTap() }) {
                         HStack {
-                            Text("Gửi tin nhắn...")
+                            Text("Trả lời...")
                                 .font(.system(size: 15))
                                 .foregroundStyle(.black.opacity(0.5))
                             Spacer()
@@ -104,7 +105,7 @@ struct PostControlsView: View {
                         .disabled(isLiking)
                         
                         Button(action: {
-                            isShowingSendMessage = true
+                            onReplyTap()
                         }) {
                             Image(systemName: "paperplane")
                                 .font(.system(size: 20))
@@ -115,9 +116,6 @@ struct PostControlsView: View {
             }
         }
         .padding(.horizontal, 16)
-        .sheet(isPresented: $isShowingSendMessage) {
-            SendMessageSheet(post: post)
-        }
         .sheet(isPresented: $isShowingComments) {
             CommentSheet(postId: post.photos.first?.id ?? post.id) // Fallback for id mapping
         }

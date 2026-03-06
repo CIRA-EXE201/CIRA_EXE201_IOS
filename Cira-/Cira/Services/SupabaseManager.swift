@@ -77,13 +77,9 @@ final class SupabaseManager {
         
         try await client.storage
             .from("audios")
-            .upload(path: path, file: data, options: FileOptions(contentType: "audio/m4a"))
+            .upload(path: path, file: data, options: FileOptions(contentType: "audio/m4a", upsert: true))
         
-        let publicURL = try client.storage
-            .from("audios")
-            .getPublicURL(path: path)
-        
-        return publicURL.absoluteString
+        return path
     }
     
     func deleteAudio(path: String) async throws {
@@ -128,8 +124,29 @@ final class SupabaseManager {
     func fetchUserPosts(userId: String, after date: Date? = nil) async throws -> [PostDTO] {
         var query = client
             .from("posts")
-            .select() // Select all fields
+            .select("*, profiles!inner(username, avatar_data)")
             .eq("owner_id", value: userId)
+            
+        if let startDate = date {
+            // Delta Sync: Only get posts updated AFTER the last sync
+            let dateString = ISO8601DateFormatter().string(from: startDate)
+            query = query.gt("updated_at", value: dateString)
+        }
+            
+        // Apply sorting at the end
+        let posts: [PostDTO] = try await query
+            .order("updated_at", ascending: false) 
+            .execute()
+            .value
+        
+        return posts
+    }
+    
+    // Fetch all posts visible to user (including friends)
+    func fetchAllVisiblePosts(after date: Date? = nil) async throws -> [PostDTO] {
+        var query = client
+            .from("posts")
+            .select("*, profiles!inner(username, avatar_data)")
             
         if let startDate = date {
             // Delta Sync: Only get posts updated AFTER the last sync

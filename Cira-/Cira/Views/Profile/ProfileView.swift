@@ -138,7 +138,9 @@ struct ProfileView: View {
         )
         
         do {
-            let photos = try modelContext.fetch(descriptor)
+            let allPhotos = try modelContext.fetch(descriptor)
+            let currentUserId = SupabaseManager.shared.currentUser?.id.uuidString ?? ""
+            let photos = allPhotos.filter { $0.ownerId == nil || $0.ownerId == currentUserId || $0.ownerId == "" }
             
             // Group by "MM-dd" and keep top 2
             var newCalendarPhotos: [String: [Data]] = [:]
@@ -175,7 +177,9 @@ struct ProfileView: View {
         let descriptor = FetchDescriptor<Photo>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         
         do {
-            let allPhotos = try modelContext.fetch(descriptor)
+            let fetchedPhotos = try modelContext.fetch(descriptor)
+            let currentUserId = SupabaseManager.shared.currentUser?.id.uuidString ?? ""
+            let allPhotos = fetchedPhotos.filter { $0.ownerId == nil || $0.ownerId == currentUserId || $0.ownerId == "" }
             
             // Calculate Streak
             var streak = 0

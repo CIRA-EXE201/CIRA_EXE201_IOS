@@ -79,6 +79,24 @@ struct ConversationView: View {
         .task {
             await loadMessages()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .messageReceived)) { notification in
+            guard let incomingMsg = notification.object as? DirectMessage else { return }
+            
+            let currentUserId = SupabaseManager.shared.currentUser?.id
+            
+            // Check if this message belongs to the current conversation
+            let isRelevant = (incomingMsg.sender_id == conversation.id && incomingMsg.receiver_id == currentUserId)
+                || (incomingMsg.receiver_id == conversation.id && incomingMsg.sender_id == currentUserId)
+            
+            if isRelevant {
+                // Avoid duplicates
+                if !messages.contains(where: { $0.id == incomingMsg.id }) {
+                    withAnimation {
+                        messages.append(incomingMsg)
+                    }
+                }
+            }
+        }
     }
     
     private func loadMessages() async {

@@ -82,12 +82,25 @@ final class HomeViewModel: ObservableObject {
     
     private var modelContext: ModelContext?
     private var cancellables = Set<AnyCancellable>()
+    private var hasSetup = false
     
     // MARK: - Init
     init() {}
     
     // MARK: - Setup
     func setup(modelContext: ModelContext) {
+        // Prevent redundant setup on tab switch — show cached state instantly
+        if hasSetup {
+            Task {
+                // Perform a silent background sync to get any new updates
+                await SyncManager.shared.performFullSync()
+                loadLocalPosts()
+                await loadSocialFeed()
+            }
+            return
+        }
+        hasSetup = true
+        
         self.modelContext = modelContext
         
         // Configure SyncManager with model context
@@ -134,10 +147,40 @@ final class HomeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
+        NotificationCenter.default.publisher(for: .newPostSaved)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.loadLocalPosts()
+            }
+            .store(in: &cancellables)
+            
+        // Listen for new post inserts (including friends' posts) — refresh feed
+        NotificationCenter.default.publisher(for: .postInserted)
+            .receive(on: RunLoop.main)
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in
+                    await self?.loadSocialFeed()
+                }
+            }
+            .store(in: &cancellables)
+        
         // Load friends and families from Supabase
         Task {
             await loadFriendsAndFamilies()
         }
+        
+        // When friendship changes (accepted/removed), reload feed automatically
+        NotificationCenter.default.publisher(for: .friendListUpdated)
+            .receive(on: RunLoop.main)
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in
+                    await self?.loadFriendsAndFamilies()
+                    await self?.loadSocialFeed()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Public Methods
@@ -166,7 +209,7 @@ final class HomeViewModel: ObservableObject {
             return
         }
         
-        let photos = PostService.shared.fetchPosts(modelContext: modelContext)
+        let photos = PostService.shared.fetchAllPosts(modelContext: modelContext)
         let allPosts: [Post] = photos.map { photo in
             PostService.shared.convertToPost(photo: photo)
         }
@@ -191,9 +234,11 @@ final class HomeViewModel: ObservableObject {
         do {
             let socialFeed = try await FeedService.shared.fetchSimpleFeed(limit: 50)
             
-            // Convert FeedPost to Post for display
-            var displayPosts = socialFeed.map { feedPost in
-                FeedService.shared.convertToDisplayPost(feedPost: feedPost)
+            // Convert FeedPost to Post for display (async for signed URLs)
+            var displayPosts: [Post] = []
+            for feedPost in socialFeed {
+                let post = await FeedService.shared.convertToDisplayPost(feedPost: feedPost)
+                displayPosts.append(post)
             }
             
             // Try to set isLiked correctly using fetchLikedPostIds

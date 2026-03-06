@@ -11,32 +11,32 @@ import SwiftUI
 struct VoiceOverlayBar: View {
     let voiceNote: Post.VoiceItem
     @Binding var isPlaying: Bool
-    @State private var progress: Double = 0
+    @StateObject private var player = VoicePlayer()
     
     var body: some View {
         HStack(spacing: 12) {
             // Play/Pause button
             Button(action: { 
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    isPlaying.toggle()
+                    player.toggle()
                 }
             }) {
                 Circle()
-                    .fill(isPlaying ? Color.blue : Color.primary)
+                    .fill(player.isPlaying ? Color.blue : Color.primary)
                     .frame(width: 40, height: 40)
                     .overlay {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white)
                     }
-                    .shadow(color: (isPlaying ? Color.blue : Color.black).opacity(0.3), radius: 8, y: 4)
+                    .shadow(color: (player.isPlaying ? Color.blue : Color.black).opacity(0.3), radius: 8, y: 4)
             }
-            .accessibilityLabel(isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             
             // Waveform
             WaveformView(
                 levels: voiceNote.waveformLevels,
-                progress: progress,
+                progress: player.playbackProgress,
                 activeColor: .primary,
                 inactiveColor: .primary.opacity(0.15)
             )
@@ -57,6 +57,29 @@ struct VoiceOverlayBar: View {
                     Capsule().stroke(.white.opacity(0.3), lineWidth: 0.5)
                 )
                 .shadow(color: .black.opacity(0.1), radius: 15, y: 8)
+        }
+        .onAppear {
+            if let url = voiceNote.audioURL {
+                player.load(url: url)
+            }
+        }
+        .onDisappear {
+            player.stop()
+        }
+        .onChange(of: player.isPlaying) { newValue in
+            DispatchQueue.main.async {
+                self.isPlaying = newValue
+            }
+        }
+        .onChange(of: isPlaying) { newValue in
+            if newValue != player.isPlaying {
+                player.toggle()
+            }
+        }
+        .onChange(of: voiceNote.audioURL) { newURL in
+            if let url = newURL {
+                player.load(url: url)
+            }
         }
     }
 }

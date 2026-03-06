@@ -183,28 +183,32 @@ final class FeedService {
     }
     
     // MARK: - Convert to Display Post
-    func convertToDisplayPost(feedPost: FeedPost) -> Post {
+    func convertToDisplayPost(feedPost: FeedPost) async -> Post {
         var voiceItem: Post.VoiceItem? = nil
         
         if let voiceURL = feedPost.voice_url, let duration = feedPost.voice_duration {
+            var finalVoiceURL = URL(string: voiceURL)
+            if !voiceURL.starts(with: "http") {
+                finalVoiceURL = try? await SupabaseManager.shared.client.storage
+                    .from("audios")
+                    .createSignedURL(path: voiceURL, expiresIn: 3600)
+            }
+            
             voiceItem = Post.VoiceItem(
                 duration: duration,
-                audioURL: URL(string: voiceURL),
+                audioURL: finalVoiceURL,
                 waveformLevels: [0.3, 0.5, 0.8, 0.6, 0.9, 0.4, 0.7]
             )
         }
         
-        var publicImageURL: URL?
-        if let imagePath = feedPost.image_path {
-            publicImageURL = try? SupabaseManager.shared.client.storage
-                .from("photos")
-                .getPublicURL(path: imagePath)
-        }
+        // We no longer generate signed URL here to improve load time
+        // Relying on lazy loading in PostCardView instead!
         
         let photoItem = Post.PhotoItem(
             id: feedPost.id,
-            imageURL: publicImageURL,
+            imageURL: nil,
             imageData: nil,
+            remoteImagePath: feedPost.image_path,
             livePhotoMoviePath: feedPost.live_photo_path,
             voiceNote: voiceItem
         )
