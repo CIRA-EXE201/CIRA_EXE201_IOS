@@ -116,13 +116,6 @@ class AudioRecorder: NSObject, ObservableObject {
         recordingTimer = nil
         isRecording = false
         
-        // Deactivate audio session
-        do {
-            try AVAudioSession.sharedInstance().setActive(false)
-        } catch {
-            print("⚠️ Could not deactivate audio session: \(error)")
-        }
-        
         print("🎙️ Recording stopped. Duration: \(String(format: "%.1f", recordingDuration))s")
     }
     
@@ -139,9 +132,10 @@ class AudioRecorder: NSObject, ObservableObject {
         }
         
         // Configure audio session for playback
+        // Use .playAndRecord to avoid conflict with camera's active session
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
             try session.setActive(true)
         } catch {
             print("❌ Audio session error: \(error)")

@@ -42,8 +42,8 @@ struct PostCardView: View {
     }
     
     // Voice bar height constant
-    static let voiceBarHeight: CGFloat = 56
-    static let voiceBarSpacing: CGFloat = 12
+    static let voiceBarHeight: CGFloat = 42
+    static let voiceBarSpacing: CGFloat = 8
     
     // Check if current photo has voice note
     var hasVoice: Bool {
@@ -63,8 +63,8 @@ struct PostCardView: View {
                 // Voice waveform bar - Overlayed AT THE BOTTOM of the card for alignment consistency
                 if let voiceNote = currentVoiceNote {
                     VoiceOverlayBar(voiceNote: voiceNote, isPlaying: $isPlayingVoice)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
                 }
             }
             .frame(width: cardWidth, height: cardHeight)
@@ -216,7 +216,7 @@ struct PostCardView: View {
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Color.black.opacity(0.5)))
                     .padding(.horizontal, 16)
-                    .padding(.bottom, hasVoice ? 80 : 16) // Push up if voice bar exists
+                    .padding(.bottom, hasVoice ? 56 : 16) // Push up if voice bar exists
             }
         }
     }

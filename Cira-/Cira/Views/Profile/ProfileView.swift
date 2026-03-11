@@ -46,6 +46,7 @@ struct ProfileView: View {
     
     // Streak
     @State private var currentStreak: Int = 0
+    @State private var monthlyPhotoCount: Int = 0
     
     // Scroll Tracking
     @State private var scrollOffset: CGFloat = 0
@@ -172,7 +173,7 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Calculate Stats (Streak)
+    // MARK: - Calculate Stats (Streak + Monthly Count)
     private func calculateStats() async {
         let descriptor = FetchDescriptor<Photo>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         
@@ -208,8 +209,18 @@ struct ProfileView: View {
                 streak = 0
             }
             
+            // Calculate monthly photo count
+            let currentMonth = calendar.component(.month, from: today)
+            let currentYear = calendar.component(.year, from: today)
+            let monthCount = allPhotos.filter { photo in
+                let photoMonth = calendar.component(.month, from: photo.createdAt)
+                let photoYear = calendar.component(.year, from: photo.createdAt)
+                return photoMonth == currentMonth && photoYear == currentYear
+            }.count
+            
             await MainActor.run {
                 self.currentStreak = streak
+                self.monthlyPhotoCount = monthCount
             }
         } catch {
             print("❌ Failed to calculate stats: \(error)")
@@ -269,7 +280,7 @@ struct ProfileView: View {
                     Image(systemName: "star.fill")
                         .font(.system(size: 14, weight: .semibold))
                     
-                    Text("Vàng")
+                    Text("Gold")
                         .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundStyle(.white)
@@ -414,10 +425,8 @@ struct ProfileView: View {
     
     // MARK: - Streak Card
     private var streakCard: some View {
-        HStack {
-            Spacer()
-            
-            // Streak content only
+        HStack(spacing: 0) {
+            // Streak
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     Text("🔥")
@@ -431,10 +440,28 @@ struct ProfileView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity)
             
-            Spacer()
+            // Divider
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(width: 1, height: 40)
             
-            // Memories section removed per user request
+            // Monthly photo count
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Text("📸")
+                        .font(.title2)
+                    Text("\(monthlyPhotoCount)")
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.black)
+                }
+                Text("ảnh tháng này")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
@@ -545,48 +572,51 @@ struct ProfileView: View {
         
         return VStack(spacing: 2) {
             // Thumbnail container
-            ZStack {
-                if hasPhoto {
-                    // Render Stacked Photos
-                    ZStack {
-                        // Bottom Photo (if exists, indexed 1 in our reverse sorted array)
-                        if photos.count > 1, let uiImage = UIImage(data: photos[1]) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .rotationEffect(.degrees(6)) // Rotate for stack effect
-                                .offset(x: 2, y: 0) // Slight offset
-                                .opacity(0.8)
+            GeometryReader { geo in
+                ZStack {
+                    if hasPhoto {
+                        // Render Stacked Photos
+                        ZStack {
+                            // Bottom Photo (if exists, indexed 1 in our reverse sorted array)
+                            if photos.count > 1, let uiImage = UIImage(data: photos[1]) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .rotationEffect(.degrees(6))
+                                    .offset(x: 2, y: 0)
+                                    .opacity(0.8)
+                            }
+                            
+                            // Top Photo (indexed 0)
+                            if let uiImage = UIImage(data: photos[0]) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                            }
                         }
-                        
-                        // Top Photo (indexed 0)
-                        if let uiImage = UIImage(data: photos[0]) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                        }
+                    } else {
+                        // Empty Placeholder
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.gray.opacity(0.08))
                     }
-                    .aspectRatio(1, contentMode: .fit)
                     
-                } else {
-                    // Empty Placeholder
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.gray.opacity(0.08))
-                        .aspectRatio(1, contentMode: .fit)
+                    // Today indicator (Border)
+                    if isToday {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.black, lineWidth: 2)
+                    }
                 }
-                
-                // Today indicator (Border)
-                if isToday {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.black, lineWidth: 2)
-                        .aspectRatio(1, contentMode: .fit)
-                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
             }
+            .aspectRatio(1, contentMode: .fit)
             
             // Day number below the image
             Text("\(day)")

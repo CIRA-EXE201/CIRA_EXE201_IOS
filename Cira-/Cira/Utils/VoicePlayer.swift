@@ -29,7 +29,13 @@ class VoicePlayer: NSObject, ObservableObject {
         stop()
         currentURL = url
         
+        // Validate URL - must be either a real local file or an HTTP URL
         if url.isFileURL {
+            // Local file — check existence
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                print("⚠️ Audio file not found at: \(url.path)")
+                return
+            }
             do {
                 audioPlayer = try AVAudioPlayer(contentsOf: url)
                 setupPlayer()
@@ -37,26 +43,41 @@ class VoicePlayer: NSObject, ObservableObject {
                 print("❌ Failed to load local audio: \(error)")
                 self.errorMessage = "Cannot load local audio"
             }
-        } else {
-            // Download audio data asynchronously
+        } else if let scheme = url.scheme, (scheme == "http" || scheme == "https") {
+            // Download audio data and save to temp file (AVAudioPlayer needs file extension for format detection)
             Task {
                 do {
-                    let (data, _) = try await URLSession.shared.data(from: url)
+                    let (data, response) = try await URLSession.shared.data(from: url)
+                    
+                    // Debug: log download info
+                    let httpResponse = response as? HTTPURLResponse
+                    let contentType = httpResponse?.value(forHTTPHeaderField: "Content-Type") ?? "unknown"
+                    let statusCode = httpResponse?.statusCode ?? -1
+                    let preview = String(data: data.prefix(100), encoding: .utf8) ?? "binary"
+                    print("🔊 Audio download: \(data.count) bytes, status: \(statusCode), type: \(contentType)")
+                    print("🔊 First bytes: \(preview)")
+                    
+                    // Save to temp file with .m4a extension so AVAudioPlayer can detect format
+                    let tempURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("voice_\(UUID().uuidString).m4a")
+                    try data.write(to: tempURL)
+                    
                     await MainActor.run {
-                        // Check if the URL hasn't changed while downloading
-                        guard self.currentURL == url else { return }
+                        guard self.currentURL == url else {
+                            try? FileManager.default.removeItem(at: tempURL)
+                            return
+                        }
                         
                         do {
-                            self.audioPlayer = try AVAudioPlayer(data: data)
+                            self.audioPlayer = try AVAudioPlayer(contentsOf: tempURL)
                             self.setupPlayer()
                             
-                            // Auto-play if play was pressed while loading
                             if self.isPlaying {
                                 self.playFromSession()
                             }
                         } catch {
-                            print("❌ Failed to play downloaded audio data: \(error)")
-                            self.errorMessage = "Cannot play downloaded audio"
+                            print("❌ Failed to play downloaded audio: \(error)")
+                            self.errorMessage = "Cannot play audio"
                             self.isPlaying = false
                         }
                     }
@@ -69,6 +90,9 @@ class VoicePlayer: NSObject, ObservableObject {
                     }
                 }
             }
+        } else {
+            // Invalid URL (e.g. relative storage path without scheme)
+            print("⚠️ Skipping invalid audio URL (not file/http): \(url)")
         }
     }
     
@@ -94,10 +118,10 @@ class VoicePlayer: NSObject, ObservableObject {
     private func playFromSession() {
         guard let player = audioPlayer else { return }
         
-        // Configure audio session
+        // Configure audio session - use .playAndRecord to avoid conflict with camera
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default)
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
             try session.setActive(true)
         } catch {
             print("❌ Audio session error: \(error)")

@@ -215,25 +215,100 @@ struct CameraControlsView: View {
                     }
                 }
             } else {
-                HStack(spacing: 40) {
-                    Button(action: { 
-                        cameraManager.clearCapturedImage()
-                        withAnimation { cameraState = .preview }
-                    }) {
-                        Image(systemName: "xmark").font(.title2).frame(width: 56, height: 56).background(Circle().fill(.ultraThinMaterial))
+                VStack(spacing: 16) {
+                    // Main action buttons
+                    HStack(spacing: 40) {
+                        // Close button - bold black icon
+                        Button(action: { 
+                            audioRecorder.deleteRecording()
+                            cameraManager.clearCapturedImage()
+                            withAnimation { cameraState = .preview }
+                        }) {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.black)
+                                .frame(width: 56, height: 56)
+                                .background(Circle().fill(Color.gray.opacity(0.1)))
+                        }
+                        
+                        // Send button - white fill, gold icon, gold border with gap
+                        Button(action: { showChapterPicker = true }) {
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 64, height: 64)
+                                .overlay(
+                                    Image(systemName: "paperplane.fill")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundStyle(goldenOrange)
+                                )
+                                .padding(6)
+                                .overlay(
+                                    Circle().stroke(goldenOrange, lineWidth: 3)
+                                )
+                        }
+                        
+                        // Voice button — changes based on recording state
+                        if audioRecorder.isRecording {
+                            // STATE 2: Recording — show stop
+                            Button(action: { audioRecorder.stopRecording() }) {
+                                Image(systemName: "stop.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 56, height: 56)
+                                    .background(Circle().fill(Color.red))
+                            }
+                        } else if audioRecorder.recordedURL != nil {
+                            // STATE 3: Has recording — show play button
+                            Button(action: { audioRecorder.togglePlayback() }) {
+                                Image(systemName: audioRecorder.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 56, height: 56)
+                                    .background(Circle().fill(.black))
+                            }
+                        } else {
+                            // STATE 1: No recording — show mic
+                            Button(action: { audioRecorder.startRecording() }) {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(.black)
+                                    .frame(width: 56, height: 56)
+                                    .background(Circle().fill(Color.gray.opacity(0.1)))
+                            }
+                        }
                     }
                     
-                    Button(action: { showChapterPicker = true }) {
-                        Circle().fill(goldenOrange).frame(width: 80, height: 80)
-                            .overlay(Image(systemName: "paperplane.fill").font(.title).foregroundStyle(.white))
-                    }
-                    
-                    Button(action: { audioRecorder.toggleRecording() }) {
-                        Image(systemName: audioRecorder.isRecording ? "stop.fill" : "mic.fill")
-                            .font(.title2).frame(width: 56, height: 56)
-                            .background(Circle().fill(audioRecorder.isRecording ? Color.red : Color.gray.opacity(0.2)))
+                    // Mini voice info bar (shown when has recording or recording)
+                    if audioRecorder.isRecording {
+                        HStack(spacing: 6) {
+                            Circle().fill(.red).frame(width: 8, height: 8)
+                            Text("Đang ghi \(audioRecorder.formatDuration(audioRecorder.recordingDuration))")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.red)
+                                .monospacedDigit()
+                        }
+                        .transition(.opacity)
+                    } else if audioRecorder.recordedURL != nil {
+                        HStack(spacing: 8) {
+                            Image(systemName: "waveform")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            Text(audioRecorder.formatDuration(audioRecorder.recordingDuration))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            
+                            Button(action: { audioRecorder.deleteRecording() }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .transition(.opacity)
                     }
                 }
+                .animation(.easeInOut(duration: 0.2), value: audioRecorder.isRecording)
+                .animation(.easeInOut(duration: 0.2), value: audioRecorder.recordedURL != nil)
             }
         }
     }

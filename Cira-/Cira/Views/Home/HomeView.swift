@@ -13,6 +13,7 @@ struct HomeView: View {
     
     @Binding var showProfile: Bool
     var avatarData: String?
+    var scrollState: HomeScrollState
     
     @State private var showNotifications = false
     @State private var showSocialHub = false
@@ -23,6 +24,8 @@ struct HomeView: View {
     @State private var quickReplyText: String = ""
     @FocusState private var isQuickReplyFocused: Bool
     @State private var isSendingReply = false
+    
+    @State private var currentScrollID: String?
     
     var body: some View {
         ZStack {
@@ -48,48 +51,64 @@ struct HomeView: View {
                         .ignoresSafeArea(.all)
                     
                     // B. Vertical Paging Scroll
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            // 1. Camera Page
-                            CameraView(screenSize: fullScreenSize, safeArea: safeArea)
-                                .containerRelativeFrame(.vertical)
-                                .id("camera")
-                            
-                            // 2. Post Pages
-                            ForEach(viewModel.combinedPosts) { post in
-                                ContentPageWrapper(screenSize: fullScreenSize, safeArea: safeArea) {
-                                    PostCardView(
-                                        post: post,
-                                        cardWidth: fullScreenSize.width,
-                                        cardHeight: CardDimensions.calculateCardHeight(screenHeight: fullScreenSize.height, safeArea: safeArea),
-                                        safeAreaTop: safeArea.top
-                                    )
-                                } controls: {
-                                    PostControlsView(
-                                        post: post,
-                                        isQuickReplyFocused: isQuickReplyFocused && quickReplyPost?.id == post.id,
-                                        onLikeToggle: { postId in
-                                            viewModel.toggleLike(for: postId)
-                                        },
-                                        onReplyTap: {
-                                            quickReplyText = ""
-                                            quickReplyPost = post
-                                            isQuickReplyFocused = true
-                                        }
-                                    )
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 0) {
+                                // 1. Camera Page
+                                CameraView(screenSize: fullScreenSize, safeArea: safeArea)
+                                    .containerRelativeFrame(.vertical)
+                                    .id("camera")
+                                
+                                // 2. Post Pages
+                                ForEach(viewModel.combinedPosts) { post in
+                                    ContentPageWrapper(screenSize: fullScreenSize, safeArea: safeArea) {
+                                        PostCardView(
+                                            post: post,
+                                            cardWidth: fullScreenSize.width,
+                                            cardHeight: CardDimensions.calculateCardHeight(screenHeight: fullScreenSize.height, safeArea: safeArea),
+                                            safeAreaTop: safeArea.top
+                                        )
+                                    } controls: {
+                                        PostControlsView(
+                                            post: post,
+                                            isQuickReplyFocused: isQuickReplyFocused && quickReplyPost?.id == post.id,
+                                            onLikeToggle: { postId in
+                                                viewModel.toggleLike(for: postId)
+                                            },
+                                            onReplyTap: {
+                                                quickReplyText = ""
+                                                quickReplyPost = post
+                                                isQuickReplyFocused = true
+                                            }
+                                        )
+                                    }
+                                    .containerRelativeFrame(.vertical)
+                                    .id(post.id.uuidString)
+                                    .onAppear {
+                                        viewModel.loadMoreIfNeeded(currentPost: post)
+                                    }
                                 }
-                                .containerRelativeFrame(.vertical)
-                                .id(post.id.uuidString)
-                                .onAppear {
-                                    viewModel.loadMoreIfNeeded(currentPost: post)
+                            }
+                            .scrollTargetLayout()
+                        }
+                        .scrollPosition(id: $currentScrollID)
+                        .scrollTargetBehavior(.paging)
+                        .scrollBounceBehavior(.basedOnSize)
+                        .ignoresSafeArea(.all)
+                        .onChange(of: currentScrollID) { _, newID in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                scrollState.isViewingPosts = (newID != nil && newID != "camera")
+                            }
+                        }
+                        .onAppear {
+                            // Register the scroll-to-camera action
+                            scrollState.scrollToCameraAction = {
+                                withAnimation(.easeInOut(duration: 0.4)) {
+                                    scrollProxy.scrollTo("camera", anchor: .top)
                                 }
                             }
                         }
-                        .scrollTargetLayout()
                     }
-                    .scrollTargetBehavior(.paging)
-                    .scrollBounceBehavior(.basedOnSize)
-                    .ignoresSafeArea(.all)
                     
                     // C. Fixed Overlays
                     VStack(spacing: 0) {
@@ -279,25 +298,9 @@ struct HomeTopBar: View {
                 .background(Capsule().fill(.ultraThinMaterial))
             }
             Spacer()
-            // Profile Avatar
-            Button(action: { showProfile = true }) {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 44, height: 44)
-                    .overlay {
-                        if let avatarStr = avatarData,
-                           let data = Data(base64Encoded: avatarStr),
-                           let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .clipShape(Circle())
-                        } else {
-                            Image(systemName: "person.fill")
-                                .foregroundStyle(.black.opacity(0.7))
-                        }
-                    }
-            }
+            // Empty spacer to balance layout
+            Color.clear
+                .frame(width: 44, height: 44)
         }
         .padding(.horizontal, 16)
     }

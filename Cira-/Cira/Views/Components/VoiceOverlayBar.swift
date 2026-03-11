@@ -2,8 +2,8 @@
 //  VoiceOverlayBar.swift
 //  Cira
 //
-//  Voice bar overlay - Clean white blur style
-//  Like Instagram voice message or Locket
+//  Compact voice player with waveform visualization
+//  Overlay usage on post cards
 //
 
 import SwiftUI
@@ -13,50 +13,71 @@ struct VoiceOverlayBar: View {
     @Binding var isPlaying: Bool
     @StateObject private var player = VoicePlayer()
     
+    private let barCount = 50
+    
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             // Play/Pause button
             Button(action: { 
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     player.toggle()
                 }
             }) {
                 Circle()
-                    .fill(player.isPlaying ? Color.blue : Color.primary)
-                    .frame(width: 40, height: 40)
+                    .fill(.white)
+                    .frame(width: 32, height: 32)
                     .overlay {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.black)
                     }
-                    .shadow(color: (player.isPlaying ? Color.blue : Color.black).opacity(0.3), radius: 8, y: 4)
             }
-            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(player.isPlaying ? "Tạm dừng" : "Phát")
             
             // Waveform
-            WaveformView(
-                levels: voiceNote.waveformLevels,
-                progress: player.playbackProgress,
-                activeColor: .primary,
-                inactiveColor: .primary.opacity(0.15)
-            )
-            .frame(height: 30)
+            GeometryReader { geo in
+                let interpolatedLevels = interpolateWaveform(
+                    source: voiceNote.waveformLevels,
+                    targetCount: barCount
+                )
+                
+                HStack(spacing: 1) {
+                    ForEach(0..<interpolatedLevels.count, id: \.self) { index in
+                        let barProgress = Double(index) / Double(interpolatedLevels.count)
+                        let isActive = barProgress <= player.playbackProgress
+                        
+                        RoundedRectangle(cornerRadius: 0.5)
+                            .fill(isActive ? Color.white : Color.white.opacity(0.35))
+                            .frame(width: 1, height: geo.size.height * CGFloat(max(0.15, interpolatedLevels[index])))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let progress = min(max(0, value.location.x / geo.size.width), 1)
+                            player.seek(to: progress)
+                        }
+                )
+            }
+            .frame(height: 18)
             
             // Duration
-            Text(voiceNote.formattedDuration)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.6))
+            Text(player.isPlaying ? formatTime(player.playbackProgress * voiceNote.duration) : voiceNote.formattedDuration)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.8))
                 .monospacedDigit()
+                .frame(minWidth: 28, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background {
             Capsule()
-                .fill(.ultraThinMaterial)
+                .fill(.black.opacity(0.45))
                 .overlay(
-                    Capsule().stroke(.white.opacity(0.3), lineWidth: 0.5)
+                    Capsule().stroke(.white.opacity(0.15), lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.1), radius: 15, y: 8)
         }
         .onAppear {
             if let url = voiceNote.audioURL {
@@ -82,9 +103,38 @@ struct VoiceOverlayBar: View {
             }
         }
     }
+    
+    // MARK: - Helpers
+    
+    private func formatTime(_ seconds: Double) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
+    }
+    
+    /// Interpolates source waveform levels to fill exactly `targetCount` bars
+    private func interpolateWaveform(source: [Float], targetCount: Int) -> [Float] {
+        guard !source.isEmpty else {
+            return Array(repeating: 0.3, count: targetCount)
+        }
+        guard source.count != targetCount else { return source }
+        
+        var result = [Float]()
+        result.reserveCapacity(targetCount)
+        
+        for i in 0..<targetCount {
+            let srcIndex = Float(i) / Float(targetCount - 1) * Float(source.count - 1)
+            let lower = Int(srcIndex)
+            let upper = min(lower + 1, source.count - 1)
+            let fraction = srcIndex - Float(lower)
+            let value = source[lower] * (1 - fraction) + source[upper] * fraction
+            result.append(value)
+        }
+        return result
+    }
 }
 
-// MARK: - Waveform View
+// MARK: - Waveform View (kept for other usages)
 struct WaveformView: View {
     let levels: [Float]
     let progress: Double

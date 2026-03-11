@@ -221,9 +221,14 @@ final class FeedService {
     func convertToDisplayPost(feedPost: FeedPost) async -> Post {
         var voiceItem: Post.VoiceItem? = nil
         
-        if let voiceURL = feedPost.voice_url, let duration = feedPost.voice_duration {
-            var finalVoiceURL = URL(string: voiceURL)
-            if !voiceURL.starts(with: "http") {
+        if let voiceURL = feedPost.voice_url, !voiceURL.isEmpty, let duration = feedPost.voice_duration, duration > 0 {
+            var finalVoiceURL: URL? = nil
+            
+            if voiceURL.starts(with: "http") {
+                // Already a full URL
+                finalVoiceURL = URL(string: voiceURL)
+            } else {
+                // Relative storage path — need signed URL
                 // Check signed URL cache first
                 if let cached = signedURLCache[voiceURL], cached.expiresAt > Date() {
                     finalVoiceURL = cached.url
@@ -233,15 +238,19 @@ final class FeedService {
                         .createSignedURL(path: voiceURL, expiresIn: 3600) {
                         finalVoiceURL = signedURL
                         signedURLCache[voiceURL] = (url: signedURL, expiresAt: Date().addingTimeInterval(signedURLTTL))
+                    } else {
+                        print("⚠️ Could not create signed URL for voice: \(voiceURL)")
                     }
                 }
             }
             
-            voiceItem = Post.VoiceItem(
-                duration: duration,
-                audioURL: finalVoiceURL,
-                waveformLevels: [0.3, 0.5, 0.8, 0.6, 0.9, 0.4, 0.7]
-            )
+            if finalVoiceURL != nil {
+                voiceItem = Post.VoiceItem(
+                    duration: duration,
+                    audioURL: finalVoiceURL,
+                    waveformLevels: [0.3, 0.5, 0.8, 0.6, 0.9, 0.4, 0.7]
+                )
+            }
         }
         
         // We no longer generate signed URL here to improve load time

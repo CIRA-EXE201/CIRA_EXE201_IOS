@@ -9,10 +9,28 @@
 import SwiftUI
 import Supabase
 
+// MARK: - Shared scroll state between HomeView ↔ TabBar
+@Observable
+class HomeScrollState {
+    var isViewingPosts = false
+    var scrollToCameraAction: (() -> Void)?
+}
+
+// MARK: - Haptic Helper
+enum HapticHelper {
+    private static let generator = UIImpactFeedbackGenerator(style: .light)
+    
+    static func light() {
+        generator.prepare()
+        generator.impactOccurred()
+    }
+}
+
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var showProfile = false
     @State private var userAvatarData: String? = nil
+    @State private var homeScrollState = HomeScrollState()
     
     enum Tab: Int, CaseIterable {
         case profile = 0
@@ -38,25 +56,63 @@ struct ContentView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Content area — swap views based on selected tab
-            Group {
-                switch selectedTab {
-                case .profile:
-                    ProfileView(safeArea: .init()) {
-                        selectedTab = .home
-                    }
-                case .home:
-                    HomeView(showProfile: $showProfile, avatarData: userAvatarData)
-                case .myStory:
-                    MyStoryView(showProfile: $showProfile, avatarData: userAvatarData)
+            // Content area — all views kept alive to preserve scroll state
+            ZStack {
+                ProfileView(safeArea: .init()) {
+                    selectedTab = .home
                 }
+                .opacity(selectedTab == .profile ? 1 : 0)
+                .allowsHitTesting(selectedTab == .profile)
+                
+                HomeView(
+                    showProfile: $showProfile,
+                    avatarData: userAvatarData,
+                    scrollState: homeScrollState
+                )
+                .opacity(selectedTab == .home ? 1 : 0)
+                .allowsHitTesting(selectedTab == .home)
+                
+                MyStoryView(showProfile: $showProfile, avatarData: userAvatarData)
+                    .opacity(selectedTab == .myStory ? 1 : 0)
+                    .allowsHitTesting(selectedTab == .myStory)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                    .onEnded { value in
+                        // Only trigger if horizontal movement is dominant
+                        let horizontalAmount = value.translation.width
+                        let verticalAmount = value.translation.height
+                        
+                        guard abs(horizontalAmount) > abs(verticalAmount),
+                              abs(horizontalAmount) > 80 else { return }
+                        
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            if horizontalAmount < 0 {
+                                // Swipe left → next tab
+                                if let next = Tab(rawValue: selectedTab.rawValue + 1) {
+                                    selectedTab = next
+                                }
+                            } else {
+                                // Swipe right → previous tab
+                                if let prev = Tab(rawValue: selectedTab.rawValue - 1) {
+                                    selectedTab = prev
+                                }
+                            }
+                        }
+                    }
+            )
             
             // Custom Tab Bar
-            CustomTabBar(selectedTab: $selectedTab)
+            CustomTabBar(
+                selectedTab: $selectedTab,
+                homeScrollState: homeScrollState
+            )
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .onChange(of: selectedTab) { _ in
+            HapticHelper.light()
+        }
         .task {
             await fetchUserAvatar()
         }
@@ -85,6 +141,7 @@ struct ContentView: View {
 // MARK: - Custom Tab Bar
 struct CustomTabBar: View {
     @Binding var selectedTab: ContentView.Tab
+    var homeScrollState: HomeScrollState
     
     var body: some View {
         HStack(spacing: 0) {
@@ -123,26 +180,49 @@ struct CustomTabBar: View {
     private func tabButton(_ tab: ContentView.Tab) -> some View {
         let isSelected = selectedTab == tab
         
+        // Determine if Home tab should show capture mode
+        let isCaptureMode = tab == .home
+            && selectedTab == .home
+            && homeScrollState.isViewingPosts
+        
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                selectedTab = tab
+            if isCaptureMode {
+                // Scroll back to camera & reset state
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    homeScrollState.isViewingPosts = false
+                }
+                homeScrollState.scrollToCameraAction?()
+                HapticHelper.light()
+            } else if selectedTab != tab {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    selectedTab = tab
+                }
+                // haptic handled by .onChange(of: selectedTab)
             }
         } label: {
-            Image(systemName: tab.icon)
-                .font(.system(size: 18, weight: isSelected ? .bold : .regular))
-                .foregroundStyle(isSelected ? .white : .black.opacity(0.4))
+            ZStack {
+                if isCaptureMode {
+                    // Custom capture button
+                    captureButton
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                } else {
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 18, weight: isSelected ? .bold : .regular))
+                        .foregroundStyle(isSelected ? .white : .black.opacity(0.4))
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isCaptureMode)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background {
-                if isSelected {
+                if isSelected && !isCaptureMode {
                     // Selected pill: dark gray with inner shadow
                     Capsule()
                         .fill(Color(white: 0.25))
                         .overlay {
-                            // Inner shadow (inset effect)
                             Capsule()
                                 .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-                            
                             Capsule()
                                 .fill(
                                     .shadow(.inner(color: .black.opacity(0.4), radius: 4, x: 0, y: 3))
@@ -155,8 +235,31 @@ struct CustomTabBar: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TabButtonStyle(isCaptureMode: isCaptureMode))
         .contentShape(Rectangle())
+    }
+    
+    private var captureButton: some View {
+        let goldenOrange = Color(red: 1.0, green: 0.75, blue: 0.0)
+        
+        return Circle()
+            .fill(.white)
+            .frame(width: 30, height: 30)
+            .padding(4) // gap between white fill and gold border
+            .overlay(
+                Circle().stroke(goldenOrange, lineWidth: 2.5)
+            )
+    }
+}
+
+// MARK: - Tab Button Style
+struct TabButtonStyle: ButtonStyle {
+    let isCaptureMode: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(isCaptureMode && configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 

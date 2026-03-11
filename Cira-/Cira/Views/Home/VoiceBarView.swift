@@ -2,7 +2,8 @@
 //  VoiceBarView.swift
 //  Cira
 //
-//  Voice playback bar for posts
+//  Compact voice playback bar for posts
+//  Waveform always fills the full width regardless of voice duration
 //
 
 import SwiftUI
@@ -11,63 +12,43 @@ struct VoiceBarView: View {
     let voiceNote: Post.VoiceItem
     @StateObject private var player = VoicePlayer()
     
+    // Number of waveform bars to always display
+    private let barCount = 40
+    
     var body: some View {
-        HStack(spacing: 10) {
-            // Play/Pause button
+        HStack(spacing: 8) {
+            // Play/Pause button - compact
             Button(action: { player.toggle() }) {
                 Circle()
                     .fill(Color.black)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 28, height: 28)
                     .overlay {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white)
                     }
             }
             
-            // Progress bar with waveform
+            // Waveform - always fills available width
             GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background waveform
-                    HStack(spacing: 2) {
-                        ForEach(0..<min(voiceNote.waveformLevels.count, 30), id: \.self) { index in
-                            let level = index < voiceNote.waveformLevels.count ? voiceNote.waveformLevels[index] : 0.5
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 3, height: max(8, CGFloat(level) * 24))
-                        }
+                let bars = interpolatedWaveform(targetCount: barCount)
+                let barWidth: CGFloat = 2.5
+                let totalBarWidth = CGFloat(barCount) * barWidth
+                let totalSpacing = geometry.size.width - totalBarWidth
+                let spacing = max(1, totalSpacing / CGFloat(barCount - 1))
+                
+                HStack(spacing: spacing) {
+                    ForEach(0..<barCount, id: \.self) { index in
+                        let level = bars[index]
+                        let barProgress = Double(index) / Double(barCount)
+                        let isPlayed = barProgress < player.playbackProgress
                         
-                        // Fill remaining space with random bars if needed
-                        if voiceNote.waveformLevels.count < 30 {
-                            ForEach(voiceNote.waveformLevels.count..<30, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 3, height: CGFloat.random(in: 8...20))
-                            }
-                        }
-                    }
-                    
-                    // Progress overlay
-                    HStack(spacing: 2) {
-                        ForEach(0..<min(voiceNote.waveformLevels.count, 30), id: \.self) { index in
-                            let level = index < voiceNote.waveformLevels.count ? voiceNote.waveformLevels[index] : 0.5
-                            let barProgress = Double(index) / 30.0
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(barProgress < player.playbackProgress ? Color.black : Color.clear)
-                                .frame(width: 3, height: max(8, CGFloat(level) * 24))
-                        }
-                        
-                        if voiceNote.waveformLevels.count < 30 {
-                            ForEach(voiceNote.waveformLevels.count..<30, id: \.self) { index in
-                                let barProgress = Double(index) / 30.0
-                                RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(barProgress < player.playbackProgress ? Color.black : Color.clear)
-                                    .frame(width: 3, height: CGFloat.random(in: 8...20))
-                            }
-                        }
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(isPlayed ? Color.black : Color.gray.opacity(0.3))
+                            .frame(width: barWidth, height: max(4, CGFloat(level) * 18))
                     }
                 }
-                .frame(height: 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
@@ -77,22 +58,21 @@ struct VoiceBarView: View {
                         }
                 )
             }
-            .frame(height: 24)
+            .frame(height: 18)
             
-            Spacer()
-            
-            // Duration
-            Text(voiceNote.formattedDuration)
-                .font(.subheadline)
+            // Duration / Current time - compact
+            Text(player.isPlaying ? formatTime(player.playbackProgress * voiceNote.duration) : voiceNote.formattedDuration)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+                .frame(minWidth: 30, alignment: .trailing)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
             Capsule()
                 .fill(Color.white)
-                .shadow(color: .black.opacity(0.08), radius: 10, y: 3)
+                .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
         )
         .padding(.horizontal, 20)
         .onAppear {
@@ -104,13 +84,45 @@ struct VoiceBarView: View {
             player.stop()
         }
     }
+    
+    // MARK: - Interpolate waveform to always fill bar count
+    /// Takes the original waveform levels (any count) and produces exactly `targetCount` bars
+    /// by interpolating the source data evenly across the target range.
+    private func interpolatedWaveform(targetCount: Int) -> [Float] {
+        let source = voiceNote.waveformLevels
+        guard !source.isEmpty else {
+            // No waveform data: generate subtle random bars
+            return (0..<targetCount).map { _ in Float.random(in: 0.2...0.5) }
+        }
+        
+        if source.count == 1 {
+            return Array(repeating: source[0], count: targetCount)
+        }
+        
+        var result: [Float] = []
+        for i in 0..<targetCount {
+            let position = Float(i) / Float(targetCount - 1) * Float(source.count - 1)
+            let lower = Int(position)
+            let upper = min(lower + 1, source.count - 1)
+            let fraction = position - Float(lower)
+            let value = source[lower] * (1 - fraction) + source[upper] * fraction
+            result.append(value)
+        }
+        return result
+    }
+    
+    private func formatTime(_ seconds: Double) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
+    }
 }
 
 #Preview {
     VoiceBarView(voiceNote: Post.VoiceItem(
-        duration: 15,
+        duration: 5,
         audioURL: nil,
-        waveformLevels: [0.3, 0.5, 0.8, 0.6, 0.9, 0.4, 0.7, 0.5, 0.3, 0.6, 0.8, 0.5]
+        waveformLevels: [0.3, 0.5, 0.8, 0.6, 0.9]
     ))
     .padding()
 }
