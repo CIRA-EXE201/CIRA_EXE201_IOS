@@ -22,6 +22,9 @@ struct ChapterDetailView: View {
     // Posts generated from chapter photos
     @State private var posts: [Post] = []
     
+    // Add Memory presentation
+    @State private var showCamera = false
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -112,6 +115,19 @@ struct ChapterDetailView: View {
             )
             .presentationBackground(.clear)
         }
+        .fullScreenCover(isPresented: $showCamera) {
+            let insets = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first(where: { $0.isKeyWindow })?.safeAreaInsets ?? .zero
+            let edgeInsets = EdgeInsets(top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
+            
+            CameraView(
+                showCloseButton: true,
+                screenSize: UIScreen.main.bounds.size,
+                safeArea: edgeInsets
+            )
+        }
     }
     
     // MARK: - Generate Posts from Chapter Photos
@@ -186,14 +202,15 @@ struct ChapterDetailView: View {
                     .font(.headline)
                     .fontWeight(.semibold)
                 
-                Text("\(posts.count) memories")
+                Text("\(posts.count) kỷ niệm")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             
             Spacer()
             
-            // Live button - for family slideshow
+            // Live button - currently hidden as requested
+            /*
             Button(action: {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showInvitePopup = true
@@ -216,6 +233,7 @@ struct ChapterDetailView: View {
                 )
                 .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             }
+            */
             
             // More options button
             Button(action: {}) {
@@ -328,18 +346,18 @@ struct ChapterDetailView: View {
                             .font(.system(size: 48))
                             .foregroundStyle(.secondary.opacity(0.5))
                         
-                        Text("No memories yet")
+                        Text("Chưa có kỷ niệm nào")
                             .font(.headline)
                             .foregroundStyle(.secondary)
                         
-                        Text("Add photos and recordings to this chapter")
+                        Text("Thêm ảnh và ghi âm vào chương này")
                             .font(.subheadline)
                             .foregroundStyle(.tertiary)
                     }
                 }
             
-            Button(action: {}) {
-                Label("Add memory", systemImage: "plus")
+            Button(action: { showCamera = true }) {
+                Label("Thêm kỷ niệm", systemImage: "plus")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 32)
@@ -415,11 +433,11 @@ struct InviteFamilyPopup: View {
     
     // Sample family members
     private let familyMembers: [FamilyMember] = [
-        FamilyMember(name: "Mom", avatar: "person.circle.fill", isSelected: true),
-        FamilyMember(name: "Dad", avatar: "person.circle.fill", isSelected: true),
-        FamilyMember(name: "Sister", avatar: "person.circle.fill", isSelected: false),
-        FamilyMember(name: "Grandpa", avatar: "person.circle.fill", isSelected: false),
-        FamilyMember(name: "Grandma", avatar: "person.circle.fill", isSelected: false),
+                    FamilyMember(name: "Mẹ", avatar: "person.circle.fill", isSelected: true),
+        FamilyMember(name: "Bố", avatar: "person.circle.fill", isSelected: true),
+        FamilyMember(name: "Em gái", avatar: "person.circle.fill", isSelected: false),
+        FamilyMember(name: "Ông nội", avatar: "person.circle.fill", isSelected: false),
+        FamilyMember(name: "Bà nội", avatar: "person.circle.fill", isSelected: false),
     ]
     
     @State private var selectedMembers: Set<UUID> = []
@@ -449,11 +467,11 @@ struct InviteFamilyPopup: View {
                     // Header
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Invite to watch Live")
+                            Text("Mời xem Trực tiếp")
                                 .font(.headline)
                                 .fontWeight(.semibold)
                             
-                            Text("Select family members to watch together")
+                            Text("Chọn thành viên gia đình để xem cùng")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -507,7 +525,7 @@ struct InviteFamilyPopup: View {
                                             .foregroundStyle(.secondary)
                                     }
                                     
-                                    Text("Add family member")
+                                    Text("Thêm thành viên")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                     
@@ -531,7 +549,7 @@ struct InviteFamilyPopup: View {
                                     .fill(.white)
                                     .frame(width: 8, height: 8)
                                 
-                                Text(selectedMembers.isEmpty ? "Start Live" : "Send invite & Start")
+                                Text(selectedMembers.isEmpty ? "Bắt đầu Trực tiếp" : "Gửi lời mời & Bắt đầu")
                                     .font(.headline)
                             }
                             .foregroundStyle(.white)

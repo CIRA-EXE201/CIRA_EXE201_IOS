@@ -22,11 +22,11 @@ struct SubscriptionPlan: Identifiable {
     let accentColor: Color
     
     var monthlyPriceText: String {
-        monthlyPrice == 0 ? "Free" : "$\(monthlyPrice / 23000)/mo"
+        monthlyPrice == 0 ? "Miễn phí" : "$\(monthlyPrice / 23000)/th"
     }
     
     var yearlyPriceText: String {
-        yearlyPrice == 0 ? "" : "$\(yearlyPrice / 23000)/yr"
+        yearlyPrice == 0 ? "" : "$\(yearlyPrice / 23000)/năm"
     }
     
     private func formatPrice(_ price: Int) -> String {
@@ -39,49 +39,49 @@ struct SubscriptionPlan: Identifiable {
     static let allPlans: [SubscriptionPlan] = [
         SubscriptionPlan(
             name: "Starter",
-            targetUsers: "New users",
+            targetUsers: "Người dùng mới",
             monthlyPrice: 0,
             yearlyPrice: 0,
-            storage: "20 photos / 1 story",
-            aiVoice: "1 auto story",
-            sharing: "3 chapters",
-            duration: "30 days",
+            storage: "20 ảnh / 1 câu chuyện",
+            aiVoice: "1 câu chuyện tự động",
+            sharing: "3 chương",
+            duration: "30 ngày",
             isPopular: false,
             accentColor: .gray
         ),
         SubscriptionPlan(
             name: "Personal",
-            targetUsers: "Individual",
+            targetUsers: "Cá nhân",
             monthlyPrice: 79000,
             yearlyPrice: 899000,
-            storage: "200 photos / 10 stories",
-            aiVoice: "Warm AI storytelling",
-            sharing: "Family feed",
-            duration: "Forever",
+            storage: "200 ảnh / 10 câu chuyện",
+            aiVoice: "AI kể chuyện ấm áp",
+            sharing: "Bảng tin gia đình",
+            duration: "Vĩnh viễn",
             isPopular: false,
             accentColor: .blue
         ),
         SubscriptionPlan(
             name: "Family",
-            targetUsers: "Family of 2-5",
+            targetUsers: "Gia đình 2-5 người",
             monthlyPrice: 179000,
             yearlyPrice: 2040000,
-            storage: "1,000 photos",
-            aiVoice: "Personalized voice",
-            sharing: "Family feed",
-            duration: "Forever",
+            storage: "1.000 ảnh",
+            aiVoice: "Giọng nói riêng",
+            sharing: "Bảng tin gia đình",
+            duration: "Vĩnh viễn",
             isPopular: true,
             accentColor: .orange
         ),
         SubscriptionPlan(
             name: "Premium",
-            targetUsers: "Large family",
+            targetUsers: "Gia đình lớn",
             monthlyPrice: 499000,
             yearlyPrice: 5599000,
-            storage: "Unlimited",
-            aiVoice: "Personalized voice",
-            sharing: "Family feed",
-            duration: "Lifetime",
+            storage: "Không giới hạn",
+            aiVoice: "Giọng nói riêng",
+            sharing: "Bảng tin gia đình",
+            duration: "Trọn đời",
             isPopular: false,
             accentColor: .purple
         )
@@ -95,8 +95,8 @@ struct SubscriptionView: View {
     @State private var billingCycle: BillingCycle = .yearly
     
     enum BillingCycle: String, CaseIterable {
-        case monthly = "Monthly"
-        case yearly = "Yearly"
+        case monthly = "Tháng"
+        case yearly = "Năm"
     }
     
     var body: some View {
@@ -197,12 +197,12 @@ struct SubscriptionView: View {
             }
             .padding(.horizontal, 20)
             
-            Text("Preserve memories\nforever")
+            Text("Lưu giữ kỷ niệm\nmãi mãi")
                 .font(.system(size: 28, weight: .bold))
                 .multilineTextAlignment(.center)
                 .padding(.top, 8)
             
-            Text("Choose the plan that fits your family")
+            Text("Chọn gói phù hợp với gia đình bạn")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -222,7 +222,7 @@ struct SubscriptionView: View {
                             .font(.system(size: 14, weight: billingCycle == cycle ? .semibold : .medium))
                         
                         if cycle == .yearly {
-                            Text("Save 15%")
+                            Text("Tiết kiệm 15%")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.green)
                         }
@@ -254,10 +254,10 @@ struct SubscriptionView: View {
         }) {
             HStack {
                 if let plan = selectedPlan {
-                    Text(plan.monthlyPrice == 0 ? "Start for free" : "Subscribe to \(plan.name)")
+                    Text(plan.monthlyPrice == 0 ? "Bắt đầu miễn phí" : "Đăng ký \(plan.name)")
                         .font(.system(size: 17, weight: .semibold))
                 } else {
-                    Text("Select a plan")
+                    Text("Chọn gói")
                         .font(.system(size: 17, weight: .semibold))
                 }
             }
@@ -275,7 +275,7 @@ struct SubscriptionView: View {
     
     // MARK: - Terms
     private var termsText: some View {
-        Text("By subscribing, you agree to our [Terms](terms) and [Privacy Policy](privacy)")
+        Text("Đăng ký là bạn đồng ý với [Điều khoản](terms) và [Chính sách Bảo mật](privacy)")
             .font(.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -305,7 +305,7 @@ struct PlanCard: View {
                 Spacer()
                 
                 if plan.isPopular {
-                    Text("Popular")
+                    Text("Phổ biến")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
@@ -326,7 +326,7 @@ struct PlanCard: View {
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(plan.accentColor)
                     } else {
-                        Text("Free")
+                        Text("Miễn phí")
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(plan.accentColor)
                     }

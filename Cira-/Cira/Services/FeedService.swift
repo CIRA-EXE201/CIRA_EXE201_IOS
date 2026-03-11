@@ -119,9 +119,23 @@ final class FeedService {
         SupabaseManager.shared.currentUser?.id
     }
     
-    // Local cache
+    // Local cache (in-memory)
     private var cachedFeed: [FeedPost] = []
     private var lastFetchDate: Date?
+    
+    // Signed URL cache with TTL (50 minutes, URLs expire at 60)
+    private var signedURLCache: [String: (url: URL, expiresAt: Date)] = [:]
+    private let signedURLTTL: TimeInterval = 50 * 60 // 50 minutes
+    
+    // MARK: - Load from Disk Cache (Instant)
+    /// Returns cached feed from local JSON file. Zero network calls.
+    func loadCachedFeed() -> [FeedPost] {
+        let cached = FeedCache.shared.load()
+        if !cached.isEmpty {
+            cachedFeed = cached
+        }
+        return cached
+    }
     
     // MARK: - Fetch Social Feed
     /// Fetches posts from friends, family, and self
@@ -187,6 +201,9 @@ final class FeedService {
         cachedFeed = posts
         lastFetchDate = Date()
         
+        // Persist to disk for next app launch
+        FeedCache.shared.save(posts)
+        
         return posts
     }
     
@@ -207,9 +224,17 @@ final class FeedService {
         if let voiceURL = feedPost.voice_url, let duration = feedPost.voice_duration {
             var finalVoiceURL = URL(string: voiceURL)
             if !voiceURL.starts(with: "http") {
-                finalVoiceURL = try? await SupabaseManager.shared.client.storage
-                    .from("audios")
-                    .createSignedURL(path: voiceURL, expiresIn: 3600)
+                // Check signed URL cache first
+                if let cached = signedURLCache[voiceURL], cached.expiresAt > Date() {
+                    finalVoiceURL = cached.url
+                } else {
+                    if let signedURL = try? await SupabaseManager.shared.client.storage
+                        .from("audios")
+                        .createSignedURL(path: voiceURL, expiresIn: 3600) {
+                        finalVoiceURL = signedURL
+                        signedURLCache[voiceURL] = (url: signedURL, expiresAt: Date().addingTimeInterval(signedURLTTL))
+                    }
+                }
             }
             
             voiceItem = Post.VoiceItem(
@@ -235,9 +260,7 @@ final class FeedService {
         let isOwnPost = feedPost.owner_id == currentUserId
         let authorName = isOwnPost ? "Me" : (feedPost.author_username ?? "Unknown")
         
-        // Parse date
-        let dateFormatter = ISO8601DateFormatter()
-        let createdDate = dateFormatter.date(from: feedPost.created_at) ?? Date()
+        let createdDate = DateFormatters.parseISO8601(feedPost.created_at) ?? Date()
         
         return Post(
             id: feedPost.id,

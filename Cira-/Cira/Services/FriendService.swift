@@ -119,7 +119,7 @@ final class FriendService {
         // Get all accepted friendships where I'm either requester or addressee
         let friendships: [Friendship] = try await client
             .from("friendships")
-            .select()
+            .select("id, requester_id, addressee_id, status")
             .eq("status", value: "accepted")
             .or("requester_id.eq.\(myId.uuidString),addressee_id.eq.\(myId.uuidString)")
             .execute()
@@ -151,7 +151,7 @@ final class FriendService {
         
         let requests: [Friendship] = try await client
             .from("friendships")
-            .select()
+            .select("id, requester_id, addressee_id, status")
             .eq("addressee_id", value: myId.uuidString)
             .eq("status", value: "pending")
             .execute()
@@ -163,13 +163,23 @@ final class FriendService {
     // MARK: - Get Pending Requests with Profiles
     func getPendingFriendRequestsWithProfiles() async throws -> [PendingFriendRequest] {
         let friendships = try await getPendingRequests()
-        var results: [PendingFriendRequest] = []
-        for friendship in friendships {
-            if let profile = try? await getUserProfile(userId: friendship.requester_id) {
-                results.append(PendingFriendRequest(friendshipId: friendship.id, profile: profile))
-            }
+        guard !friendships.isEmpty else { return [] }
+        
+        // Batch fetch all requester profiles in a single query (fixes N+1)
+        let requesterIds = friendships.map { $0.requester_id.uuidString }
+        let profiles: [FriendProfile] = try await client
+            .from("profiles")
+            .select("id, username, avatar_data")
+            .in("id", values: requesterIds)
+            .execute()
+            .value
+        
+        let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+        
+        return friendships.compactMap { friendship in
+            guard let profile = profileMap[friendship.requester_id] else { return nil }
+            return PendingFriendRequest(friendshipId: friendship.id, profile: profile)
         }
-        return results
     }
     
     // MARK: - Search Users by Username

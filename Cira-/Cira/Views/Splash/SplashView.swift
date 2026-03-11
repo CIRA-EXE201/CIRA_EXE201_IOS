@@ -48,7 +48,7 @@ struct SplashView: View {
                     .scaleEffect(isAnimating ? 1.0 : 0.8)
                     .opacity(isAnimating ? 1.0 : 0.0)
                 
-                Text("Preserve memories with your voice")
+                Text("Lưu giữ ký ức bằng giọng nói")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .opacity(isAnimating ? 1.0 : 0.0)
@@ -87,7 +87,7 @@ struct SplashView: View {
                     .opacity(isAnimating ? 1.0 : 0.0)
                 
                 // App tagline
-                Text("Preserve memories with your voice")
+                Text("Lưu giữ ký ức bằng giọng nói")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .opacity(isAnimating ? 1.0 : 0.0)
@@ -101,7 +101,7 @@ struct SplashView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "g.circle.fill")
                             .font(.title2)
-                        Text("Continue with Google")
+                        Text("Tiếp tục với Google")
                             .font(.headline)
                     }
                     .foregroundColor(.white)

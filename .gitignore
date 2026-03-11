@@ -142,3 +142,6 @@ Cira-.xcodeproj/
 
 # Google Auth
 *.apps.googleusercontent.com.plist
+
+# Agent Skills
+.agents/

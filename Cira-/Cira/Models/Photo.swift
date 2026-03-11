@@ -20,8 +20,8 @@ enum SyncStatus: String, Codable {
 final class Photo {
     var id: UUID
     var createdAt: Date
-    var imageData: Data?
-    var thumbnailData: Data?
+    @Attribute(.externalStorage) var imageData: Data?
+    @Attribute(.externalStorage) var thumbnailData: Data?
     var message: String?
     var livePhotoMoviePath: String?
     
@@ -71,9 +71,7 @@ final class Photo {
     }
     
     var formattedDate: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: createdAt, relativeTo: Date())
+        DateFormatters.relative.localizedString(for: createdAt, relativeTo: Date())
     }
     
     var isSynced: Bool {

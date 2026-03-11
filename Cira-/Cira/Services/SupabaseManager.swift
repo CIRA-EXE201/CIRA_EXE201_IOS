@@ -143,6 +143,12 @@ final class SupabaseManager {
     }
     
     // Fetch all posts visible to user (including friends)
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    
     func fetchAllVisiblePosts(after date: Date? = nil) async throws -> [PostDTO] {
         var query = client
             .from("posts")
@@ -150,13 +156,14 @@ final class SupabaseManager {
             
         if let startDate = date {
             // Delta Sync: Only get posts updated AFTER the last sync
-            let dateString = ISO8601DateFormatter().string(from: startDate)
+            let dateString = Self.iso8601Formatter.string(from: startDate)
             query = query.gt("updated_at", value: dateString)
         }
             
-        // Apply sorting at the end
+        // Apply sorting and limit at the end
         let posts: [PostDTO] = try await query
-            .order("updated_at", ascending: false) 
+            .order("updated_at", ascending: false)
+            .limit(200)
             .execute()
             .value
         

@@ -43,11 +43,11 @@ struct ChapterPickerSheet: View {
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Single post")
+                                    Text("Bài đăng đơn")
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundStyle(.primary)
                                     
-                                    Text("Post this photo as a single post")
+                                    Text("Đăng ảnh này dưới dạng bài đơn")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -80,11 +80,11 @@ struct ChapterPickerSheet: View {
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Create new chapter")
+                                    Text("Tạo chương mới")
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundStyle(.primary)
                                     
-                                    Text("Start a new story")
+                                    Text("Bắt đầu câu chuyện mới")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -102,7 +102,7 @@ struct ChapterPickerSheet: View {
                     
                     // Existing chapters
                     if !chapters.isEmpty {
-                        Section(header: Text("Add to existing chapter")) {
+                        Section(header: Text("Thêm vào chương có sẵn")) {
                             ForEach(chapters) { chapter in
                                 Button(action: {
                                     onSelect(chapter)
@@ -117,11 +117,11 @@ struct ChapterPickerSheet: View {
                 }
                 .listStyle(.insetGrouped)
             }
-            .navigationTitle("Save to")
+            .navigationTitle("Lưu vào")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("Huỷ") {
                         dismiss()
                     }
                 }
@@ -210,18 +210,18 @@ struct CreateChapterSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Information")) {
-                    TextField("Chapter name", text: $name)
+                Section(header: Text("Thông tin")) {
+                    TextField("Tên chương", text: $name)
                         .focused($isNameFocused)
                     
-                    TextField("Description (optional)", text: $description, axis: .vertical)
+                    TextField("Mô tả (không bắt buộc)", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                 }
                 
                 Section {
                     // Preview
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Preview")
+                        Text("Xem trước")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         
@@ -237,7 +237,7 @@ struct CreateChapterSheet: View {
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(name.isEmpty ? "Chapter name" : name)
+                                Text(name.isEmpty ? "Tên chương" : name)
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(name.isEmpty ? .secondary : .primary)
                                 
@@ -252,17 +252,17 @@ struct CreateChapterSheet: View {
                     }
                 }
             }
-            .navigationTitle("Create chapter")
+            .navigationTitle("Tạo chương")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("Huỷ") {
                         dismiss()
                     }
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
+                    Button("Tạo") {
                         createChapter()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)

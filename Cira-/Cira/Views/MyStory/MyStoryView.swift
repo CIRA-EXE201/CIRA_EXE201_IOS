@@ -85,7 +85,7 @@ struct MyStoryView: View {
     // MARK: - Header
     private var headerView: some View {
         HStack(spacing: 16) {
-            Text("My Story")
+            Text("Câu chuyện")
                 .font(.title)
                 .fontWeight(.bold)
             
@@ -124,7 +124,7 @@ struct MyStoryView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(.secondary)
                 
-                Text("Search chapters...")
+                Text("Tìm chương...")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 
@@ -165,7 +165,7 @@ struct MyStoryView: View {
                         .foregroundStyle(.gray)
                 }
                 
-                Text("Create new chapter")
+                Text("Tạo chương mới")
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundStyle(.secondary)
@@ -251,10 +251,10 @@ struct ChapterCard: View {
                     .lineLimit(1)
                 
                 HStack(spacing: 6) {
-                    Text("\(chapter.photoCount) photos")
+                    Text("\(chapter.photoCount) ảnh")
                     
                     if chapter.voiceCount > 0 {
-                        Text("• \(chapter.voiceCount) recordings")
+                        Text("• \(chapter.voiceCount) ghi âm")
                     }
                 }
                 .font(.caption)
@@ -270,17 +270,17 @@ struct ChapterCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 20))
         .contextMenu {
             Button(action: {}) {
-                Label("Rename", systemImage: "pencil")
+                Label("Đổi tên", systemImage: "pencil")
             }
             
             Button(action: {}) {
-                Label("Share", systemImage: "square.and.arrow.up")
+                Label("Chia sẻ", systemImage: "square.and.arrow.up")
             }
             
             Divider()
             
             Button(role: .destructive, action: onDelete) {
-                Label("Delete", systemImage: "trash")
+                Label("Xoá", systemImage: "trash")
             }
         }
     }

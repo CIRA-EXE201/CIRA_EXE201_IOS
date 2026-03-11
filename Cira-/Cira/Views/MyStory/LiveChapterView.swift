@@ -102,7 +102,7 @@ struct LiveChapterView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "waveform")
                             .font(.title2)
-                        Text("Playing voice...")
+                        Text("Đang phát giọng nói...")
                             .font(.subheadline)
                     }
                     .foregroundStyle(.white.opacity(0.7))
@@ -204,7 +204,7 @@ struct LiveChapterView: View {
             }
             
             // Share info
-            Text("Family is watching with you")
+            Text("Gia đình đang xem cùng bạn")
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.6))
         }
@@ -224,7 +224,7 @@ struct LiveChapterView: View {
                         .animation(.easeOut(duration: 1).repeatForever(autoreverses: false), value: isPlaying)
                 )
             
-            Text("LIVE")
+            Text("TRỰC TIẾP")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
         }

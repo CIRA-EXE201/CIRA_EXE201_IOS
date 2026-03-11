@@ -269,7 +269,7 @@ struct ProfileView: View {
                     Image(systemName: "star.fill")
                         .font(.system(size: 14, weight: .semibold))
                     
-                    Text("Gold")
+                    Text("Vàng")
                         .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundStyle(.white)
@@ -295,7 +295,7 @@ struct ProfileView: View {
                     .font(.headline)
                     .transition(.opacity)
             } else {
-                Text("Profile")
+                Text("Hồ sơ")
                     .font(.headline)
                     .transition(.opacity)
             }
@@ -427,7 +427,7 @@ struct ProfileView: View {
                         .fontWeight(.bold)
                         .foregroundStyle(.black)
                 }
-                Text("day streak")
+                Text("ngày liên tiếp")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

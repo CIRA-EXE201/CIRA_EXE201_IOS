@@ -115,34 +115,8 @@ struct HomeView: View {
                 SocialHubView()
             }
             
-            // E. Initial Loading Overlay
-            if viewModel.isInitialLoading {
-                ZStack {
-                    Color.white.ignoresSafeArea()
-                    
-                    VStack(spacing: 32) {
-                        Spacer()
-                        
-                        Image("Logo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 180, height: 180)
-                        
-                        Text("Preserve memories with your voice")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        
-                        Spacer()
-                        
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                        
-                        Spacer().frame(height: 40)
-                    }
-                }
-                .zIndex(100)
-                .transition(.opacity.animation(.easeInOut(duration: 0.3)))
-            }
+            // Loading overlay removed — SplashView already handles initial loading.
+            // HomeView content appears progressively as data loads.
             
             // D. Quick Reply Overlay
             if let post = quickReplyPost {
@@ -203,7 +177,8 @@ struct HomeView: View {
         .onChange(of: isQuickReplyFocused) { _, isFocused in
             if !isFocused {
                 // Slight delay to allow keyboard animation to finish before removing view
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(100))
                     if !self.isQuickReplyFocused {
                         self.quickReplyPost = nil
                     }

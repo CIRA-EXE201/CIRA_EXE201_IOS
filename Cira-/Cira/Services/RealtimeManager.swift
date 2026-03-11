@@ -188,17 +188,13 @@ final class RealtimeManager: ObservableObject {
                     await SyncManager.shared.downloadAndSaveFromRealtime(dto: dto)
                 }
                 
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: .postInserted, object: dto)
-                }
+                NotificationCenter.default.post(name: .postInserted, object: dto)
                 
             case .update(let action):
                 let data = try JSONEncoder().encode(action.record)
                 let dto = try JSONDecoder().decode(PostDTO.self, from: data)
                 
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: .postUpdated, object: dto)
-                }
+                NotificationCenter.default.post(name: .postUpdated, object: dto)
                 
             case .delete(let action):
                 let oldRecord = action.oldRecord
@@ -209,9 +205,7 @@ final class RealtimeManager: ObservableObject {
                 if let id = UUID(uuidString: deleted.id) {
                     await deletePostFromRemote(id: id)
                     
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: .postDeleted, object: id)
-                    }
+                    NotificationCenter.default.post(name: .postDeleted, object: id)
                 }
             default:
                 break
@@ -241,9 +235,7 @@ final class RealtimeManager: ObservableObject {
                 
                 print("📩 [Realtime] New message received: \(message.content)")
                 
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: .messageReceived, object: message)
-                }
+                NotificationCenter.default.post(name: .messageReceived, object: message)
             default:
                 break
             }
@@ -424,9 +416,7 @@ final class RealtimeManager: ObservableObject {
             
             print("👥 [Realtime] Friendship change: \(friendship.status)")
             
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .friendListUpdated, object: nil)
-            }
+            NotificationCenter.default.post(name: .friendListUpdated, object: nil)
         }
         
         do {
@@ -441,9 +431,7 @@ final class RealtimeManager: ObservableObject {
                 
             case .delete(_):
                 // Friend removed — reload friend list
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: .friendListUpdated, object: nil)
-                }
+                NotificationCenter.default.post(name: .friendListUpdated, object: nil)
                 
             default:
                 break

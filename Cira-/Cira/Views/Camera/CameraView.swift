@@ -25,6 +25,8 @@ struct CameraView: View {
     @State private var showChapterPicker = false
     @State private var zoomLevel: CGFloat = 1.0
     
+    var showCloseButton: Bool = false
+    
     let screenSize: CGSize
     let safeArea: EdgeInsets
     
@@ -37,7 +39,8 @@ struct CameraView: View {
                 messageText: $messageText,
                 zoomLevel: $zoomLevel,
                 cardWidth: screenSize.width,
-                cardHeight: CardDimensions.calculateCardHeight(screenHeight: screenSize.height, safeArea: safeArea)
+                cardHeight: CardDimensions.calculateCardHeight(screenHeight: screenSize.height, safeArea: safeArea),
+                showCloseButton: showCloseButton
             )
         } controls: {
             CameraControlsView(
@@ -50,6 +53,13 @@ struct CameraView: View {
         }
         .onAppear { cameraManager.checkPermission(); cameraManager.startSession() }
         .onDisappear { cameraManager.stopSession() }
+        .onChange(of: cameraManager.capturedImage) { _, newImage in
+            if newImage != nil {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    cameraState = .captured
+                }
+            }
+        }
         .sheet(isPresented: $showChapterPicker) {
             ChapterPickerSheet { chapter in
                 saveToChapter(chapter)
@@ -100,7 +110,9 @@ struct CameraPageContent: View {
     
     let cardWidth: CGFloat
     let cardHeight: CGFloat
+    var showCloseButton: Bool = false
     
+    @Environment(\.dismiss) private var dismiss
     private let goldenOrange = Color(red: 1.0, green: 0.75, blue: 0.0)
     
     var body: some View {
@@ -117,36 +129,54 @@ struct CameraPageContent: View {
                     }
                 }
             } else if let image = cameraManager.capturedImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: CardDimensions.cornerRadius, style: .continuous))
-                
-                VStack {
-                    Spacer()
-                    TextField("Add a message", text: $messageText)
+                // Captured state: image contained within card + black border
+                ZStack(alignment: .bottom) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: cardWidth, height: cardHeight)
+                        .clipped()
+                    
+                    // Message input at bottom of card
+                    TextField("Thêm lời nhắn", text: $messageText)
                         .padding(12)
                         .background(Capsule().fill(.ultraThinMaterial))
-                        .padding(16)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
                 }
+                .clipShape(RoundedRectangle(cornerRadius: CardDimensions.cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CardDimensions.cornerRadius, style: .continuous)
+                        .stroke(Color.black, lineWidth: 3)
+                )
             }
         }
         .frame(width: cardWidth, height: cardHeight)
         .overlay(
-            RoundedRectangle(cornerRadius: CardDimensions.cornerRadius, style: .continuous)
-                .stroke(.white.opacity(0.4), lineWidth: 0.5)
+            Group {
+                if cameraState == .preview {
+                    RoundedRectangle(cornerRadius: CardDimensions.cornerRadius, style: .continuous)
+                        .stroke(.white.opacity(0.4), lineWidth: 0.5)
+                }
+            }
         )
         .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
     }
     
     private var previewTopOverlay: some View {
         HStack {
+            if showCloseButton {
+                Button(action: { dismiss() }) {
+                    Circle().fill(Color.black.opacity(0.4)).frame(width: 44, height: 44)
+                        .overlay(Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundStyle(.white))
+                }
+            }
+            Spacer()
             Button(action: { cameraManager.toggleFlash() }) {
                 Circle().fill(Color.black.opacity(0.4)).frame(width: 44, height: 44)
                     .overlay(Image(systemName: cameraManager.isFlashOn ? "bolt.fill" : "bolt.slash.fill")
                         .foregroundStyle(cameraManager.isFlashOn ? goldenOrange : .white))
             }
-            Spacer()
             Button(action: { zoomLevel = zoomLevel == 1.0 ? 2.0 : 1.0; cameraManager.setZoom(level: zoomLevel) }) {
                 Circle().fill(Color.black.opacity(0.4)).frame(width: 44, height: 44)
                     .overlay(Text("\(Int(zoomLevel))x").font(.system(size: 14, weight: .bold)).foregroundStyle(.white))
@@ -171,8 +201,9 @@ struct CameraControlsView: View {
             if cameraState == .preview {
                 HStack(spacing: 60) {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Image(systemName: "photo.stack").font(.title2).foregroundStyle(.primary)
+                        Image(systemName: "photo.stack").font(.title2).foregroundStyle(.black)
                     }
+                    .tint(.black)
                     
                     Button(action: { cameraManager.capturePhoto() }) {
                         Circle().stroke(goldenOrange, lineWidth: 4).frame(width: 80, height: 80)
@@ -180,7 +211,7 @@ struct CameraControlsView: View {
                     }
                     
                     Button(action: { cameraManager.toggleCamera() }) {
-                        Image(systemName: "arrow.triangle.2.circlepath").font(.title2).foregroundStyle(.primary)
+                        Image(systemName: "arrow.triangle.2.circlepath").font(.title2).foregroundStyle(.black)
                     }
                 }
             } else {

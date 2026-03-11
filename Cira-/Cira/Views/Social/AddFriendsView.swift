@@ -79,7 +79,7 @@ struct AddFriendsView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.gray)
             
-            TextField("Search by username...", text: $searchText)
+            TextField("Tìm theo tên người dùng...", text: $searchText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .onChange(of: searchText) { _, newValue in
@@ -104,14 +104,14 @@ struct AddFriendsView: View {
     // MARK: - Invite Link Section
     private var inviteLinkSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Invite Friends")
+            Text("Mời Bạn bè")
                 .font(.headline)
             
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Share your invite link")
+                    Text("Chia sẻ liên kết mời")
                         .font(.subheadline)
-                    Text("Friends can add you directly")
+                    Text("Bạn bè có thể thêm bạn trực tiếp")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -121,7 +121,7 @@ struct AddFriendsView: View {
                 Button(action: { showShareSheet = true }) {
                     HStack(spacing: 6) {
                         Image(systemName: "square.and.arrow.up")
-                        Text("Share")
+                        Text("Chia sẻ")
                     }
                     .font(.subheadline.bold())
                     .foregroundColor(.white)
@@ -143,7 +143,7 @@ struct AddFriendsView: View {
     private var searchResultsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Search Results")
+                Text("Kết quả tìm kiếm")
                     .font(.headline)
                 
                 if isSearching {
@@ -153,7 +153,7 @@ struct AddFriendsView: View {
             }
             
             if searchResults.isEmpty && !isSearching {
-                Text("No users found")
+                Text("Không tìm thấy người dùng")
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 32)
@@ -168,10 +168,10 @@ struct AddFriendsView: View {
     // MARK: - Suggested Friends
     private var suggestedFriendsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Suggested")
+            Text("Gợi ý")
                 .font(.headline)
             
-            Text("Find friends by searching their username above")
+            Text("Tìm bạn bè bằng cách nhập tên người dùng ở đây")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -213,7 +213,7 @@ struct AddFriendsView: View {
             Spacer()
             
             Button(action: { sendFriendRequest(to: user) }) {
-                Text("Add")
+                Text("Thêm")
                     .font(.subheadline.bold())
                     .foregroundColor(.white)
                     .padding(.horizontal, 20)
@@ -234,7 +234,7 @@ struct AddFriendsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if pendingRequests.isEmpty {
-                    Text("No pending requests")
+                    Text("Không có yêu cầu nào")
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 48)
@@ -261,9 +261,9 @@ struct AddFriendsView: View {
                 }
             
             VStack(alignment: .leading, spacing: 2) {
-                Text("Friend Request")
+                Text("Lời mời kết bạn")
                     .font(.headline)
-                Text("Pending")
+                Text("Đang chờ")
                     .font(.caption)
                     .foregroundColor(.orange)
             }

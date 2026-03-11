@@ -57,32 +57,34 @@ struct FriendWall: Identifiable {
 @MainActor
 final class HomeViewModel: ObservableObject {
     // MARK: - Published Properties
-    @Published private(set) var posts: [Post] = []          // Local SwiftData posts (yours)
-    @Published private(set) var feedPosts: [Post] = []      // Social feed from friends/family display items
+    @Published private(set) var posts: [Post] = [] {          // Local SwiftData posts (yours)
+        didSet { rebuildCombinedPosts() }
+    }
+    @Published private(set) var feedPosts: [Post] = [] {      // Social feed from friends/family display items
+        didSet { rebuildCombinedPosts() }
+    }
     @Published private var rawFeedPosts: [FeedPost] = []    // Raw social feed from Supabase
     private var currentConversionIndex = 0                  // Pagination tracker for display items
     private var isConvertingPosts = false                   // Prevent concurrent lazy load fetches
+    private var cachedLikedIds: Set<UUID> = []              // Cached liked post IDs (Issue #6 fix)
     @Published private(set) var isInitialLoading = true             // Track initial feed load
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var familyWalls: [FriendWall] = []
     @Published private(set) var friendWalls: [FriendWall] = []
     
-    // Combined feed (local + social, sorted by date)
-    var combinedPosts: [Post] {
-        // Merge local posts with social feed posts
+    // Combined feed (local + social, sorted by date) — cached for performance
+    @Published private(set) var combinedPosts: [Post] = []
+    
+    private func rebuildCombinedPosts() {
         var allPosts = posts + feedPosts
-        
-        // Remove duplicates (keep first occurrence by ID)
         var seenIDs = Set<UUID>()
         allPosts = allPosts.filter { post in
             if seenIDs.contains(post.id) { return false }
             seenIDs.insert(post.id)
             return true
         }
-        
-        // Sort by date (newest first)
-        return allPosts.sorted { $0.createdAt > $1.createdAt }
+        combinedPosts = allPosts.sorted { $0.createdAt > $1.createdAt }
     }
     
     private var modelContext: ModelContext?
@@ -96,15 +98,8 @@ final class HomeViewModel: ObservableObject {
     func setup(modelContext: ModelContext) {
         if hasSetup {
             Task {
-                // Perform a silent background sync to get any new updates
-                await SyncManager.shared.performFullSync()
-                await MainActor.run {
-                    self.loadLocalPosts()
-                }
-                await loadSocialFeed()
-                await MainActor.run {
-                    self.isInitialLoading = false
-                }
+                // Background refresh — don't block UI
+                await refreshFeedInBackground()
             }
             return
         }
@@ -118,25 +113,44 @@ final class HomeViewModel: ObservableObject {
         // Configure RealtimeManager for real-time sync
         RealtimeManager.shared.configure(modelContext: modelContext)
         
-        // Load local posts first (instant)
-        loadLocalPosts()
+        // DON'T load local posts yet — wait until friend posts are also ready
+        // so combinedPosts is built ONCE with everything, not twice (local-only → local+friends)
         
-        // Then load everything from network
-        Task {
-            // Load social feed from friends/family IMMEDIATELY
-            await loadSocialFeed()
+        // Load cached social feed from disk (instant, no network)
+        let cachedFeed = FeedService.shared.loadCachedFeed()
+        if !cachedFeed.isEmpty {
+            self.rawFeedPosts = cachedFeed
+            self.currentConversionIndex = 0
             
-            await MainActor.run {
+            Task {
+                // Convert first 3 cached friend posts
+                await loadMoreSocialPosts(count: 3)
+                
+                // NOW load local posts — both local + friend posts build combinedPosts together
+                loadLocalPosts()
                 self.isInitialLoading = false
+                
+                // Background refresh from network
+                await refreshFeedInBackground()
+                
+                // Start listening to realtime changes
+                await RealtimeManager.shared.startListening()
             }
-            
-            // Start listening to realtime changes
-            await RealtimeManager.shared.startListening()
-            
-            // Sync local data with Supabase in background without blocking UI
-            Task.detached {
-                await SyncManager.shared.performFullSync()
-                await MainActor.run {
+        } else {
+            // No cache — first time user, fetch friend posts from network first
+            Task {
+                // Load friend posts FIRST (this is what the user sees immediately)
+                await loadSocialFeed()
+                
+                // THEN load local posts — combinedPosts now has both
+                loadLocalPosts()
+                self.isInitialLoading = false
+                
+                await RealtimeManager.shared.startListening()
+                
+                // Sync local data with Supabase in background
+                Task {
+                    await SyncManager.shared.performFullSync()
                     self.loadLocalPosts()
                 }
             }
@@ -249,12 +263,17 @@ final class HomeViewModel: ObservableObject {
     @MainActor
     func loadSocialFeed() async {
         do {
-            // Fetch raw feed metadata instantly
+            // Fetch raw feed metadata from network
             let socialFeed = try await FeedService.shared.fetchSimpleFeed(limit: 50)
             
             self.rawFeedPosts = socialFeed
             self.feedPosts = []
             self.currentConversionIndex = 0
+            
+            // Fetch likedIds ONCE and cache (Issue #6 fix)
+            if let likedIds = try? await LikeService.shared.fetchLikedPostIds() {
+                self.cachedLikedIds = likedIds
+            }
             
             // Rapidly convert just the first 3 items to show the UI instantly
             await loadMoreSocialPosts(count: 3)
@@ -263,6 +282,72 @@ final class HomeViewModel: ObservableObject {
         } catch {
             print("❌ Failed to load social feed: \(error)")
             self.errorMessage = "Failed to load feed: \(error.localizedDescription)"
+        }
+    }
+    
+    // MARK: - Background Refresh (Smart Merge)
+    /// Fetches latest feed from network and merges with current display.
+    /// Does NOT clear existing posts — only adds new ones and updates counts.
+    @MainActor
+    private func refreshFeedInBackground() async {
+        do {
+            let networkFeed = try await FeedService.shared.fetchSimpleFeed(limit: 50)
+            
+            // Fetch likedIds
+            if let likedIds = try? await LikeService.shared.fetchLikedPostIds() {
+                self.cachedLikedIds = likedIds
+            }
+            
+            // Build set of network post IDs for quick lookup
+            let networkIds = Set(networkFeed.map { $0.id })
+            let existingIds = Set(rawFeedPosts.map { $0.id })
+            
+            // Find new posts (in network but not in current feed)
+            let newPosts = networkFeed.filter { !existingIds.contains($0.id) }
+            
+            // Find removed posts (in current feed but not in network)
+            let removedIds = existingIds.subtracting(networkIds)
+            
+            // Replace raw feed with network data
+            self.rawFeedPosts = networkFeed
+            
+            // Remove deleted posts from display
+            if !removedIds.isEmpty {
+                self.feedPosts.removeAll { removedIds.contains($0.id) }
+            }
+            
+            // Update like/comment counts for existing posts
+            for feedPost in networkFeed {
+                if let displayIndex = self.feedPosts.firstIndex(where: { $0.id == feedPost.id }) {
+                    self.feedPosts[displayIndex].likeCount = feedPost.like_count ?? 0
+                    self.feedPosts[displayIndex].commentCount = feedPost.comment_count ?? 0
+                    self.feedPosts[displayIndex].isLiked = self.cachedLikedIds.contains(feedPost.id)
+                }
+            }
+            
+            // Convert and prepend new posts
+            if !newPosts.isEmpty {
+                var newDisplayPosts: [Post] = []
+                for feedPost in newPosts {
+                    var post = await FeedService.shared.convertToDisplayPost(feedPost: feedPost)
+                    post.isLiked = cachedLikedIds.contains(post.id)
+                    newDisplayPosts.append(post)
+                }
+                self.feedPosts.insert(contentsOf: newDisplayPosts, at: 0)
+            }
+            
+            // Update conversion index to match full raw feed
+            self.currentConversionIndex = min(self.currentConversionIndex, self.feedPosts.count)
+            
+            // Sync local posts in background
+            Task {
+                await SyncManager.shared.performFullSync()
+                self.loadLocalPosts()
+            }
+            
+            print("✅ Background refresh complete: \(newPosts.count) new, \(removedIds.count) removed")
+        } catch {
+            print("❌ Background refresh failed: \(error)")
         }
     }
     
@@ -286,18 +371,11 @@ final class HomeViewModel: ObservableObject {
             newDisplayPosts.append(post)
         }
         
-        // Update isLiked status for these new posts
-        if let likedIds = try? await LikeService.shared.fetchLikedPostIds() {
+        // Apply cached likedIds (fetched once in loadSocialFeed)
+        if !cachedLikedIds.isEmpty {
             newDisplayPosts = newDisplayPosts.map { post in
                 var p = post
-                p.isLiked = likedIds.contains(p.id)
-                return p
-            }
-            
-            // Sync local `posts` since they might have been loaded earlier as false
-            self.posts = self.posts.map { post in
-                var p = post
-                p.isLiked = likedIds.contains(p.id)
+                p.isLiked = cachedLikedIds.contains(p.id)
                 return p
             }
         }
@@ -442,9 +520,9 @@ final class HomeViewModel: ObservableObject {
         var profileUsername: String?
         var profileAvatar: String?
         
-        // Fetch author info to build FeedPost
+        // Fetch author info to build FeedPost (single lookup instead of fetching all friends)
         if let authorId = UUID(uuidString: dto.owner_id) {
-            if let profile = try? await FriendService.shared.getFriends().first(where: { $0.id == authorId }) {
+            if let profile = try? await FriendService.shared.getUserProfile(userId: authorId) {
                 profileUsername = profile.username
                 profileAvatar = profile.avatar_data
             }

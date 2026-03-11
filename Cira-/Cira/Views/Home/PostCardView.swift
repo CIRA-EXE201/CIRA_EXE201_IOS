@@ -19,6 +19,9 @@ struct PostCardView: View {
     @State private var isPlayingLivePhoto = false
     @State private var isPlayingVoice = false
     
+    // Off-thread decoded image (Issue #2 fix)
+    @State private var processedImage: UIImage?
+    
     // Signed URL lazy loading
     @State private var signedImageURLs: [UUID: URL] = [:]
     @State private var fetchingImageIDs = Set<UUID>()
@@ -93,22 +96,41 @@ struct PostCardView: View {
                     }
             )
         }
+        // Decode image off main thread when photo changes
+        .task(id: currentPhoto?.id) {
+            guard let photo = currentPhoto, let imageData = photo.imageData else {
+                processedImage = nil
+                return
+            }
+            processedImage = await ImageProcessor.shared.downsample(
+                data: imageData,
+                targetSize: CGSize(width: cardWidth, height: cardHeight)
+            )
+        }
     }
     
     // MARK: - Image Layer
     @ViewBuilder
     private var imageLayer: some View {
         if let photo = currentPhoto {
-            if let imageData = photo.imageData, let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: cardWidth, height: cardHeight)
-                
-                // Live Photo overlay
-                if let movieURL = photo.livePhotoMovieURL, isPlayingLivePhoto {
-                    LivePhotoVideoPlayer(videoURL: movieURL, isPlaying: $isPlayingLivePhoto)
+            if photo.imageData != nil {
+                // Off-thread decoded image via ImageProcessor actor
+                if let processedImage {
+                    Image(uiImage: processedImage)
+                        .resizable()
+                        .scaledToFill()
                         .frame(width: cardWidth, height: cardHeight)
+                    
+                    // Live Photo overlay
+                    if let movieURL = photo.livePhotoMovieURL, isPlayingLivePhoto {
+                        LivePhotoVideoPlayer(videoURL: movieURL, isPlaying: $isPlayingLivePhoto)
+                            .frame(width: cardWidth, height: cardHeight)
+                    }
+                } else {
+                    // Show placeholder while decoding off-thread
+                    Color.black.opacity(0.1)
+                        .frame(width: cardWidth, height: cardHeight)
+                        .overlay(ProgressView())
                 }
             } else if let imageURL = (photo.imageURL ?? signedImageURLs[photo.id]) {
                 AsyncImage(url: imageURL) { phase in
@@ -129,13 +151,16 @@ struct PostCardView: View {
                 Color.black.opacity(0.1)
                     .frame(width: cardWidth, height: cardHeight)
                     .overlay(ProgressView())
-                    .task {
+                    .task(id: photo.id) {
                         guard !fetchingImageIDs.contains(photo.id) else { return }
                         fetchingImageIDs.insert(photo.id)
-                        if let url = try? await SupabaseManager.shared.client.storage.from("photos").createSignedURL(path: remotePath, expiresIn: 3600) {
-                            await MainActor.run {
-                                self.signedImageURLs[photo.id] = url
-                            }
+                        do {
+                            let url = try await SupabaseManager.shared.client.storage.from("photos").createSignedURL(path: remotePath, expiresIn: 3600)
+                            self.signedImageURLs[photo.id] = url
+                        } catch {
+                            print("⚠️ Failed to create signed URL for \(remotePath): \(error.localizedDescription)")
+                            // Remove from fetching set so it can retry on next appear
+                            fetchingImageIDs.remove(photo.id)
                         }
                     }
             } else {

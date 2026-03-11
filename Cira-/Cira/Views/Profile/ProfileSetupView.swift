@@ -26,7 +26,7 @@ struct ProfileSetupView: View {
                     Spacer()
                     
                     // Title
-                    Text("Complete Your Profile")
+                    Text("Hoàn tất Hồ sơ")
                         .font(.title.bold())
                     
                     // Avatar Picker
@@ -57,16 +57,16 @@ struct ProfileSetupView: View {
                         }
                     }
                     
-                    Text("Tap to add a profile photo")
+                    Text("Chạm để thêm ảnh đại diện")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
                     // Username Field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Username")
+                        Text("Tên người dùng")
                             .font(.subheadline.bold())
                         
-                        TextField("Enter your username", text: $username)
+                        TextField("Nhập tên người dùng", text: $username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .padding()
@@ -97,7 +97,7 @@ struct ProfileSetupView: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             } else {
-                                Text("Complete Setup")
+                                Text("Hoàn tất")
                                     .font(.headline)
                             }
                         }

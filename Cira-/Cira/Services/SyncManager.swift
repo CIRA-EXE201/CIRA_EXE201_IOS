@@ -414,32 +414,19 @@ final class SyncManager: ObservableObject {
             
             var downloadedCount = 0
             
-            // Pre-fetch locally existing IDs to avoid N fetches
-            // Only if we downloaded *something*
-            if !remotePosts.isEmpty {
-                 let existingPhotos = try modelContext.fetch(FetchDescriptor<Photo>())
-                 let existingIDs = Set(existingPhotos.map { $0.id.uuidString.lowercased() })
-                 
-                 for dto in remotePosts {
-                     // Upsert logic:
-                     // If exists, update? Current logic only downloads NEW.
-                     // Delta sync returns UPDATED too.
-                     // We should process even if it exists (to update it).
-                     // But `downloadAndSave` currently inserts new logic.
-                     
-                     if existingIDs.contains(dto.id.lowercased()) {
-                         // UPDATE existing (TODO: Implement update logic if needed)
-                         // For now, let's assume we want to overwrite/update?
-                         // Current logic was: `if !existingIDs.contains(dto.id) { download... }`
-                         // We should probably invoke a method to UPDATE data if it changed.
-                         // For speed, let's stick to "Download New" for now, unless User wants full sync.
-                         // But Delta Sync implies fetching updates.
-                     } else {
-                         // NEW
-                        await downloadAndSave(dto: dto)
-                        downloadedCount += 1
-                     }
-                 }
+            // Check existence per remote post WITHOUT loading entire Photo objects
+            // (Previous code fetched ALL Photos including imageData blobs into RAM)
+            for dto in remotePosts {
+                let dtoUUID = UUID(uuidString: dto.id) ?? UUID()
+                let existsDescriptor = FetchDescriptor<Photo>(
+                    predicate: #Predicate { $0.id == dtoUUID }
+                )
+                let existsCount = (try? modelContext.fetchCount(existsDescriptor)) ?? 0
+                
+                if existsCount == 0 {
+                    await downloadAndSave(dto: dto)
+                    downloadedCount += 1
+                }
             }
             
             print("✅ Down Sync Complete - Processed \(remotePosts.count) items, Downloaded \(downloadedCount) new.")

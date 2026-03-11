@@ -180,7 +180,11 @@ struct PostControlsView: View {
         if diff < 60 { return "vừa xong" }
         if diff < 3600 { return "\(diff/60)ph" }
         if diff < 86400 { return "\(diff/3600)g" }
-        return "1d"
+        let days = diff / 86400
+        if days < 7 { return "\(days)d" }
+        if days < 30 { return "\(days/7)w" }
+        if days < 365 { return "\(days/30)mo" }
+        return "\(days/365)y"
     }
 }
 
