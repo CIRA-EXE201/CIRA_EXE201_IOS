@@ -69,7 +69,7 @@ struct FriendInviteSheet: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Color.blue)
+                        .background(Color.black)
                         .cornerRadius(12)
                 }
             }

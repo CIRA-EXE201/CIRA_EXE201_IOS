@@ -51,6 +51,14 @@ struct ProfileView: View {
     // Scroll Tracking
     @State private var scrollOffset: CGFloat = 0
     
+    // MARK: - Account Management
+    @State private var showSignOutAlert = false
+    @State private var showDeleteFirstAlert = false
+    @State private var showDeleteConfirmAlert = false
+    @State private var deleteConfirmText = ""
+    @State private var isDeletingAccount = false
+    @State private var deleteError: String?
+    
     var body: some View {
         GeometryReader { proxy in
             
@@ -76,6 +84,9 @@ struct ProfileView: View {
                         
                         // Calendar - all 12 months
                         calendarSection
+                        
+                        // MARK: - Account Settings
+                        accountSection
                         
                         Spacer(minLength: 40)
                     }
@@ -272,31 +283,8 @@ struct ProfileView: View {
     // MARK: - Header
     private var headerView: some View {
         HStack {
-            // Subscription button - Gold (now on left)
-            Button(action: {
-                showSubscription = true
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                    
-                    Text("Gold")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    LinearGradient(
-                        colors: [Color.yellow, Color.orange],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.interactive())
+            // Placeholder for balance
+            Color.clear.frame(width: 44, height: 44)
             
             Spacer()
             
@@ -699,6 +687,179 @@ struct ProfileView: View {
         return monthComponents.year == todayComponents.year &&
                monthComponents.month == todayComponents.month &&
                day == todayComponents.day
+    }
+    // MARK: - Account Settings Section
+    private var accountSection: some View {
+        VStack(spacing: 12) {
+            // Section Header
+            HStack {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.black.opacity(0.5))
+                Text("Tài khoản")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.black.opacity(0.5))
+                Spacer()
+            }
+            .padding(.top, 16)
+            
+            // Sign Out
+            Button {
+                showSignOutAlert = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.right.square")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.black.opacity(0.7))
+                    Text("Đăng xuất")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.black.opacity(0.85))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.black.opacity(0.3))
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.black.opacity(0.04))
+                )
+            }
+            .buttonStyle(.plain)
+            
+            // Delete Account
+            Button {
+                showDeleteFirstAlert = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.red)
+                    Text("Xoá tài khoản")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.red)
+                    Spacer()
+                    if isDeletingAccount {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.red.opacity(0.4))
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.red.opacity(0.06))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeletingAccount)
+            
+            if let deleteError {
+                Text(deleteError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            
+            // Version
+            Text("CIRA v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")")
+                .font(.system(size: 12))
+                .foregroundStyle(.black.opacity(0.3))
+                .padding(.top, 8)
+        }
+        // Sign Out Alert
+        .alert("Đăng xuất?", isPresented: $showSignOutAlert) {
+            Button("Huỷ", role: .cancel) { }
+            Button("Đăng xuất", role: .destructive) {
+                signOut()
+            }
+        } message: {
+            Text("Bạn có chắc muốn đăng xuất khỏi CIRA?")
+        }
+        // Delete Account - First Warning
+        .alert("Xoá tài khoản?", isPresented: $showDeleteFirstAlert) {
+            Button("Huỷ", role: .cancel) { }
+            Button("Tiếp tục", role: .destructive) {
+                deleteConfirmText = ""
+                showDeleteConfirmAlert = true
+            }
+        } message: {
+            Text("Tất cả dữ liệu của bạn sẽ bị xoá vĩnh viễn bao gồm ảnh, bài đăng, tin nhắn và kết nối. Hành động này không thể hoàn tác.")
+        }
+        // Delete Account - Type to Confirm
+        .alert("Nhập DELETE để xác nhận", isPresented: $showDeleteConfirmAlert) {
+            TextField("DELETE", text: $deleteConfirmText)
+                .autocorrectionDisabled()
+            Button("Huỷ", role: .cancel) {
+                deleteConfirmText = ""
+            }
+            Button("Xoá vĩnh viễn", role: .destructive) {
+                if deleteConfirmText == "DELETE" {
+                    performDeleteAccount()
+                }
+            }
+        } message: {
+            Text("Nhập \"DELETE\" để xác nhận xoá tài khoản.")
+        }
+    }
+    
+    // MARK: - Sign Out
+    private func signOut() {
+        Task {
+            do {
+                // Stop realtime listening
+                await RealtimeManager.shared.stopListening()
+                
+                // Clear all local data to prevent leakage to next user
+                SyncManager.shared.clearAllLocalData()
+                ReportService.shared.clearCache()
+                FeedCache.shared.clear()
+                FeedCache.shared.clearCurrentUser()
+                FeedService.shared.clearCache()
+                
+                try await SupabaseManager.shared.signOut()
+            } catch {
+                print("❌ Sign out failed: \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Delete Account
+    private func performDeleteAccount() {
+        isDeletingAccount = true
+        deleteError = nil
+        
+        Task {
+            do {
+                // 1. Delete account on server (cascade)
+                try await SupabaseManager.shared.deleteAccount()
+                
+                // 2. Clear local SwiftData
+                await clearLocalData()
+                
+                // 3. Clear caches
+                ReportService.shared.clearCache()
+                
+                // Auth state change will navigate back to splash
+            } catch {
+                await MainActor.run {
+                    deleteError = "Không thể xoá tài khoản. Vui lòng thử lại."
+                    isDeletingAccount = false
+                }
+            }
+        }
+    }
+    
+    private func clearLocalData() async {
+        await MainActor.run {
+            do {
+                try modelContext.delete(model: Photo.self)
+            } catch {
+                print("❌ Failed to clear local data: \(error)")
+            }
+        }
     }
 }
 

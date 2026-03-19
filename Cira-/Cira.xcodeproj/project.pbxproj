@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C5BE37482F69104500AFB430 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C5BE37472F69104500AFB430 /* WidgetKit.framework */; };
+		C5BE374A2F69104500AFB430 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C5BE37492F69104500AFB430 /* SwiftUI.framework */; };
+		C5BE37552F69104700AFB430 /* CiraWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C5BE37462F69104500AFB430 /* CiraWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C5D4E08A2F1B57A1007D8F8D /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = C5D4E0892F1B57A1007D8F8D /* Auth */; };
 		C5D4E08C2F1B57A1007D8F8D /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = C5D4E08B2F1B57A1007D8F8D /* Functions */; };
 		C5D4E08E2F1B57A1007D8F8D /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = C5D4E08D2F1B57A1007D8F8D /* PostgREST */; };
@@ -32,15 +35,46 @@
 			remoteGlobalIDString = 13B86F532EDD3A2B0030DD94;
 			remoteInfo = "Cira-";
 		};
+		C5BE37532F69104700AFB430 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 13B86F4C2EDD3A2A0030DD94 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C5BE37452F69104500AFB430;
+			remoteInfo = CiraWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C5BE375A2F69104700AFB430 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C5BE37552F69104700AFB430 /* CiraWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		13B86F542EDD3A2B0030DD94 /* Cira.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cira.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B86F632EDD3A2C0030DD94 /* CiraTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CiraTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B86F6D2EDD3A2C0030DD94 /* CiraUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CiraUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5BE37462F69104500AFB430 /* CiraWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CiraWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5BE37472F69104500AFB430 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		C5BE37492F69104500AFB430 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C5BE37592F69104700AFB430 /* Exceptions for "CiraWidget" folder in "CiraWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C5BE37452F69104500AFB430 /* CiraWidgetExtension */;
+		};
 		C5D4E0942F1B5CD9007D8F8D /* Exceptions for "Cira" folder in "Cira" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -67,6 +101,14 @@
 		13B86F702EDD3A2C0030DD94 /* Cira-UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Cira-UITests";
+			sourceTree = "<group>";
+		};
+		C5BE374B2F69104500AFB430 /* CiraWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C5BE37592F69104700AFB430 /* Exceptions for "CiraWidget" folder in "CiraWidgetExtension" target */,
+			);
+			path = CiraWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -101,6 +143,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C5BE37432F69104500AFB430 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C5BE374A2F69104500AFB430 /* SwiftUI.framework in Frameworks */,
+				C5BE37482F69104500AFB430 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -110,6 +161,7 @@
 				13B86F562EDD3A2B0030DD94 /* Cira */,
 				13B86F662EDD3A2C0030DD94 /* Cira-Tests */,
 				13B86F702EDD3A2C0030DD94 /* Cira-UITests */,
+				C5BE374B2F69104500AFB430 /* CiraWidget */,
 				C5D4E09E2F1B688C007D8F8D /* Frameworks */,
 				13B86F552EDD3A2B0030DD94 /* Products */,
 			);
@@ -121,6 +173,7 @@
 				13B86F542EDD3A2B0030DD94 /* Cira.app */,
 				13B86F632EDD3A2C0030DD94 /* CiraTests.xctest */,
 				13B86F6D2EDD3A2C0030DD94 /* CiraUITests.xctest */,
+				C5BE37462F69104500AFB430 /* CiraWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -128,6 +181,8 @@
 		C5D4E09E2F1B688C007D8F8D /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C5BE37472F69104500AFB430 /* WidgetKit.framework */,
+				C5BE37492F69104500AFB430 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -142,10 +197,12 @@
 				13B86F502EDD3A2B0030DD94 /* Sources */,
 				13B86F512EDD3A2B0030DD94 /* Frameworks */,
 				13B86F522EDD3A2B0030DD94 /* Resources */,
+				C5BE375A2F69104700AFB430 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C5BE37542F69104700AFB430 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				13B86F562EDD3A2B0030DD94 /* Cira */,
@@ -211,6 +268,28 @@
 			productReference = 13B86F6D2EDD3A2C0030DD94 /* CiraUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		C5BE37452F69104500AFB430 /* CiraWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C5BE37562F69104700AFB430 /* Build configuration list for PBXNativeTarget "CiraWidgetExtension" */;
+			buildPhases = (
+				C5BE37422F69104500AFB430 /* Sources */,
+				C5BE37432F69104500AFB430 /* Frameworks */,
+				C5BE37442F69104500AFB430 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C5BE374B2F69104500AFB430 /* CiraWidget */,
+			);
+			name = CiraWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = CiraWidgetExtension;
+			productReference = C5BE37462F69104500AFB430 /* CiraWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -218,8 +297,8 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2610;
-				LastUpgradeCheck = 2610;
+				LastSwiftUpdateCheck = 2620;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					13B86F532EDD3A2B0030DD94 = {
 						CreatedOnToolsVersion = 26.1.1;
@@ -231,6 +310,9 @@
 					13B86F6C2EDD3A2C0030DD94 = {
 						CreatedOnToolsVersion = 26.1.1;
 						TestTargetID = 13B86F532EDD3A2B0030DD94;
+					};
+					C5BE37452F69104500AFB430 = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -255,6 +337,7 @@
 				13B86F532EDD3A2B0030DD94 /* Cira */,
 				13B86F622EDD3A2C0030DD94 /* CiraTests */,
 				13B86F6C2EDD3A2C0030DD94 /* CiraUITests */,
+				C5BE37452F69104500AFB430 /* CiraWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -275,6 +358,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		13B86F6B2EDD3A2C0030DD94 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C5BE37442F69104500AFB430 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -305,6 +395,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C5BE37422F69104500AFB430 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -317,6 +414,11 @@
 			isa = PBXTargetDependency;
 			target = 13B86F532EDD3A2B0030DD94 /* Cira */;
 			targetProxy = 13B86F6E2EDD3A2C0030DD94 /* PBXContainerItemProxy */;
+		};
+		C5BE37542F69104700AFB430 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C5BE37452F69104500AFB430 /* CiraWidgetExtension */;
+			targetProxy = C5BE37532F69104700AFB430 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -373,12 +475,13 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -430,11 +533,12 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -445,28 +549,31 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Cira/Cira.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6NUUJH3K83;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 9KTP24P95N;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Cira/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Cira needs access to your camera to capture photos for your stories.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Cira needs access to your microphone to record voice notes for your photos.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Cira needs permission to save photos to your photo library.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Cira needs access to your photo library to select photos for your stories.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "CIRA cần truy cập camera để chụp ảnh và ghi lại khoảnh khắc hàng ngày của bạn.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "CIRA cần truy cập microphone để ghi lại tin nhắn thoại cho bạn bè và gia đình.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "CIRA cần quyền lưu ảnh vào thư viện ảnh của bạn.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "CIRA cần truy cập thư viện ảnh để bạn chọn ảnh đại diện.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tutu.Cira-";
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -482,28 +589,31 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Cira/Cira.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6NUUJH3K83;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 9KTP24P95N;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Cira/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Cira needs access to your camera to capture photos for your stories.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Cira needs access to your microphone to record voice notes for your photos.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Cira needs permission to save photos to your photo library.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Cira needs access to your photo library to select photos for your stories.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "CIRA cần truy cập camera để chụp ảnh và ghi lại khoảnh khắc hàng ngày của bạn.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "CIRA cần truy cập microphone để ghi lại tin nhắn thoại cho bạn bè và gia đình.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "CIRA cần quyền lưu ảnh vào thư viện ảnh của bạn.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "CIRA cần truy cập thư viện ảnh để bạn chọn ảnh đại diện.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tutu.Cira-";
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -519,11 +629,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tutu.Cira-Tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -540,11 +650,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tutu.Cira-Tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -560,10 +670,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tutu.Cira-UITests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -579,10 +689,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tutu.Cira-UITests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -591,6 +701,72 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = "Cira-";
+			};
+			name = Release;
+		};
+		C5BE37572F69104700AFB430 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CiraWidget/CiraWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 9KTP24P95N;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CiraWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CiraWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app.CiraWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C5BE37582F69104700AFB430 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CiraWidget/CiraWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 9KTP24P95N;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CiraWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CiraWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cira.app.CiraWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -629,6 +805,15 @@
 			buildConfigurations = (
 				13B86F7E2EDD3A2C0030DD94 /* Debug */,
 				13B86F7F2EDD3A2C0030DD94 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C5BE37562F69104700AFB430 /* Build configuration list for PBXNativeTarget "CiraWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C5BE37572F69104700AFB430 /* Debug */,
+				C5BE37582F69104700AFB430 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

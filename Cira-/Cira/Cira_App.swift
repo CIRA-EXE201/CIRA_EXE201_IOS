@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import Supabase
+import WidgetKit
 
 @main
 struct Cira_App: App {
@@ -32,6 +33,17 @@ struct Cira_App: App {
         WindowGroup {
             SplashView()
                 .onOpenURL { url in
+                    // Handle Widget Deep Link (cira://post/<postId>)
+                    if url.scheme == "cira", url.host == "post" {
+                        let pathComponents = url.pathComponents
+                        if pathComponents.count > 1 {
+                            let postId = pathComponents[1]
+                            print("📱 Widget tapped — post: \(postId)")
+                            // TODO: Navigate to specific post in feed
+                        }
+                        return
+                    }
+                    
                     // Handle Google Sign-In URL
                     if GoogleAuthManager.shared.handle(url) {
                         return

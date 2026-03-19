@@ -7,6 +7,8 @@
 
 import Foundation
 import Supabase
+import WidgetKit
+import UIKit
 
 // MARK: - Feed Post Model
 struct FeedPost: Codable, Identifiable {
@@ -174,8 +176,11 @@ final class FeedService {
             throw FeedError.notAuthenticated
         }
         
+        // Load blocked users
+        let blockedIds = try await ReportService.shared.getBlockedUserIds()
+        
         // RLS will automatically filter based on visibility and relationships
-        let posts: [FeedPost] = try await client
+        var posts: [FeedPost] = try await client
             .from("posts")
             .select("""
                 id,
@@ -198,11 +203,21 @@ final class FeedService {
             .execute()
             .value
         
+        // Filter out blocked users
+        if !blockedIds.isEmpty {
+            posts = posts.filter { !blockedIds.contains($0.owner_id) }
+        }
+        
         cachedFeed = posts
         lastFetchDate = Date()
         
         // Persist to disk for next app launch
         FeedCache.shared.save(posts)
+        
+        // Update widget data for home screen widget
+        Task.detached(priority: .utility) {
+            await Self.updateWidgetData(from: posts)
+        }
         
         return posts
     }
@@ -215,6 +230,14 @@ final class FeedService {
     // MARK: - Refresh Feed
     func refreshFeed() async throws {
         _ = try await fetchSimpleFeed()
+    }
+    
+    // MARK: - Clear Cache
+    /// Clears in-memory feed data. Call on sign out.
+    func clearCache() {
+        cachedFeed = []
+        lastFetchDate = nil
+        signedURLCache = [:]
     }
     
     // MARK: - Convert to Display Post
@@ -253,12 +276,25 @@ final class FeedService {
             }
         }
         
-        // We no longer generate signed URL here to improve load time
-        // Relying on lazy loading in PostCardView instead!
+        // Pre-generate signed image URL so PostCardView has it immediately
+        var signedImageURL: URL? = nil
+        if let imagePath = feedPost.image_path, !imagePath.isEmpty {
+            // Check signed URL cache first
+            if let cached = signedURLCache[imagePath], cached.expiresAt > Date() {
+                signedImageURL = cached.url
+            } else {
+                if let url = try? await SupabaseManager.shared.client.storage
+                    .from("photos")
+                    .createSignedURL(path: imagePath, expiresIn: 3600) {
+                    signedImageURL = url
+                    signedURLCache[imagePath] = (url: url, expiresAt: Date().addingTimeInterval(signedURLTTL))
+                }
+            }
+        }
         
         let photoItem = Post.PhotoItem(
             id: feedPost.id,
-            imageURL: nil,
+            imageURL: signedImageURL, // Pre-signed URL ready for immediate use
             imageData: nil,
             remoteImagePath: feedPost.image_path,
             livePhotoMoviePath: feedPost.live_photo_path,
@@ -286,6 +322,71 @@ final class FeedService {
             isLiked: feedPost.is_liked ?? false,
             message: feedPost.message
         )
+    }
+    
+    // MARK: - Widget Data Orchestration
+    
+    /// Converts FeedPosts to WidgetPosts, caches thumbnails, and triggers widget refresh.
+    /// This runs on a detached task after each feed refresh.
+    private static func updateWidgetData(from feedPosts: [FeedPost]) async {
+        let maxPosts = 5
+        let topPosts = Array(feedPosts.prefix(maxPosts))
+        
+        var widgetPosts: [WidgetPost] = []
+        
+        for feedPost in topPosts {
+            let widgetPost = WidgetPost(
+                id: feedPost.id,
+                authorUsername: feedPost.author_username ?? "Friend",
+                message: feedPost.message,
+                hasVoice: feedPost.voice_url != nil && !(feedPost.voice_url?.isEmpty ?? true),
+                createdAt: DateFormatters.parseISO8601(feedPost.created_at) ?? Date()
+            )
+            widgetPosts.append(widgetPost)
+            
+            // Download and cache thumbnail
+            if let imagePath = feedPost.image_path, !imagePath.isEmpty {
+                await cacheWidgetImage(storagePath: imagePath, postId: feedPost.id)
+            }
+        }
+        
+        WidgetDataProvider.shared.savePosts(widgetPosts)
+        
+        // Refresh widget timeline
+        await MainActor.run {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+    
+    /// Downloads image from Supabase and saves as a JPEG thumbnail for the widget.
+    private static func cacheWidgetImage(storagePath: String, postId: UUID) async {
+        // Skip if already cached
+        guard !WidgetDataProvider.shared.hasImage(postId: postId) else { return }
+        
+        do {
+            let data = try await SupabaseManager.shared.client.storage
+                .from("photos")
+                .download(path: storagePath)
+            
+            // Downscale to widget size (2x retina for small widget ≈ 310×310px)
+            if let original = UIImage(data: data) {
+                let maxDimension: CGFloat = 400
+                let size = original.size
+                let scale = min(maxDimension / size.width, maxDimension / size.height, 1.0)
+                let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+                
+                let renderer = UIGraphicsImageRenderer(size: newSize)
+                let thumbnail = renderer.image { _ in
+                    original.draw(in: CGRect(origin: .zero, size: newSize))
+                }
+                
+                if let jpegData = thumbnail.jpegData(compressionQuality: 0.7) {
+                    WidgetDataProvider.shared.saveImage(jpegData, postId: postId)
+                }
+            }
+        } catch {
+            print("⚠️ Widget: Failed to cache image for \(postId): \(error)")
+        }
     }
 }
 

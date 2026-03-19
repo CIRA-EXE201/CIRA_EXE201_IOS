@@ -113,10 +113,10 @@ struct AIVoiceChatView: View {
         .padding(.vertical, 8)
     }
     
-    // MARK: - Input Bar with Liquid Glass
+    // MARK: - Input Bar (iOS 18 compatible with iOS 26 glass fallback)
     private var inputBar: some View {
         HStack(spacing: 12) {
-            // Text input field - tap to show popup - Liquid Glass style
+            // Text input field
             Button(action: {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showChatPopup = true
@@ -136,13 +136,13 @@ struct AIVoiceChatView: View {
                 .padding(.vertical, 14)
                 .background(
                     Capsule()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.black.opacity(0.06))
                 )
-                .glassEffect(.regular.interactive())
+                .modifier(GlassEffectModifier())
             }
             .buttonStyle(.plain)
             
-            // Voice button - Liquid Glass style
+            // Voice button
             Button(action: {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     showChatPopup = true
@@ -154,10 +154,21 @@ struct AIVoiceChatView: View {
                     .frame(width: 48, height: 48)
                     .background(
                         Circle()
-                            .fill(.ultraThinMaterial)
+                            .fill(Color.black.opacity(0.06))
                     )
-                    .glassEffect(.regular.interactive())
+                    .modifier(GlassEffectModifier())
             }
+        }
+    }
+}
+
+// MARK: - Glass Effect Modifier (iOS 26+ only, minimal fallback for iOS 18+)
+struct GlassEffectModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive())
+        } else {
+            content
         }
     }
 }

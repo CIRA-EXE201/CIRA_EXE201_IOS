@@ -245,6 +245,10 @@ class CameraManager: NSObject, ObservableObject {
         
         session.commitConfiguration()
         print("✅ Session configuration complete")
+        
+        // Auto-start session after configuration
+        // This fixes the race condition where startSession() was called before permission was granted
+        startSession()
     }
     
     // MARK: - Start Session

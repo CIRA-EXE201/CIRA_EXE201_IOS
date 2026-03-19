@@ -16,11 +16,19 @@ struct PostControlsView: View {
     let isQuickReplyFocused: Bool
     let onReplyTap: () -> Void
     
-    init(post: Post, isQuickReplyFocused: Bool = false, onLikeToggle: @escaping (UUID) -> Void, onReplyTap: @escaping () -> Void) {
+    // Report/Block states
+    @State private var showReportSheet = false
+    @State private var showBlockAlert = false
+    @State private var showBlockedToast = false
+    @State private var isBlocking = false
+    var onBlockUser: ((UUID) -> Void)? = nil
+    
+    init(post: Post, isQuickReplyFocused: Bool = false, onLikeToggle: @escaping (UUID) -> Void, onReplyTap: @escaping () -> Void, onBlockUser: ((UUID) -> Void)? = nil) {
         self.post = post
         self.isQuickReplyFocused = isQuickReplyFocused
         self.onLikeToggle = onLikeToggle
         self.onReplyTap = onReplyTap
+        self.onBlockUser = onBlockUser
         _isLiked = State(initialValue: post.isLiked)
         _likeCount = State(initialValue: post.likeCount)
         _commentCount = State(initialValue: post.commentCount)
@@ -63,6 +71,29 @@ struct PostControlsView: View {
                         .foregroundStyle(.black.opacity(0.5))
                 }
                 Spacer()
+                
+                // Report/Block menu (only for other users' posts)
+                if !isMyPost {
+                    Menu {
+                        Button(role: .none) {
+                            showReportSheet = true
+                        } label: {
+                            Label("Báo cáo", systemImage: "flag")
+                        }
+                        
+                        Button(role: .destructive) {
+                            showBlockAlert = true
+                        } label: {
+                            Label("Chặn \(post.author.username)", systemImage: "hand.raised")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.black.opacity(0.5))
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                }
             }
             
             
@@ -122,6 +153,43 @@ struct PostControlsView: View {
         .sheet(isPresented: $isShowingComments) {
             CommentSheet(postId: post.photos.first?.id ?? post.id) // Fallback for id mapping
         }
+        .sheet(isPresented: $showReportSheet) {
+            ReportContentSheet(
+                postId: post.id,
+                reportedUserId: post.author.id,
+                reportedUsername: post.author.username
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .alert("Chặn \(post.author.username)?", isPresented: $showBlockAlert) {
+            Button("Huỷ", role: .cancel) { }
+            Button("Chặn", role: .destructive) {
+                blockUser()
+            }
+        } message: {
+            Text("Bạn sẽ không còn thấy bài đăng từ \(post.author.username). Bạn có thể bỏ chặn trong phần cài đặt.")
+        }
+        .overlay {
+            if showBlockedToast {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.white)
+                        Text("Đã chặn \(post.author.username)")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color.black.opacity(0.85)))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 8)
+                }
+                .animation(.spring(response: 0.3), value: showBlockedToast)
+            }
+        }
         .onChange(of: post.isLiked) { oldValue, newValue in
             logger.debug("onChange(isLiked) for \(post.id.uuidString). old: \(oldValue), new: \(newValue)")
             isLiked = newValue
@@ -132,6 +200,30 @@ struct PostControlsView: View {
         }
         .onChange(of: post.commentCount) { oldValue, newValue in
             commentCount = newValue
+        }
+    }
+    
+    // MARK: - Block User
+    private func blockUser() {
+        isBlocking = true
+        Task {
+            do {
+                try await ReportService.shared.blockUser(userId: post.author.id)
+                withAnimation {
+                    showBlockedToast = true
+                }
+                // Notify parent to remove from feed
+                onBlockUser?(post.author.id)
+                
+                // Auto-hide toast
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation {
+                    showBlockedToast = false
+                }
+            } catch {
+                print("Failed to block user: \(error)")
+            }
+            isBlocking = false
         }
     }
     
@@ -199,3 +291,4 @@ struct ReactionButton: View {
         }
     }
 }
+

@@ -63,6 +63,7 @@ struct SplashView: View {
         }
         .onAppear {
             checkAuthState()
+            listenForAuthChanges()
             withAnimation(.easeOut(duration: 0.8)) {
                 isAnimating = true
             }
@@ -154,6 +155,12 @@ struct SplashView: View {
                 return
             }
             
+            // Set user-scoped cache BEFORE loading any data
+            FeedCache.shared.setCurrentUser(id: userId.uuidString)
+            
+            // Share auth token with widget extension
+            await SupabaseManager.shared.shareTokenWithWidget()
+            
             // Check if profile has username
             do {
                 let profile: Profile? = try await SupabaseManager.shared.client
@@ -164,10 +171,15 @@ struct SplashView: View {
                     .execute()
                     .value
                 
-                withAnimation {
-                    if let profile, profile.username != nil {
+                if let profile, profile.username != nil {
+                    // Profile exists → preload feed BEFORE going to home
+                    await preloadFeedData()
+                    
+                    withAnimation {
                         destination = .home
-                    } else {
+                    }
+                } else {
+                    withAnimation {
                         destination = .profileSetup
                     }
                 }
@@ -177,6 +189,29 @@ struct SplashView: View {
                     destination = .profileSetup
                 }
             }
+        }
+    }
+    
+    /// Preload feed data while the loading screen is still visible.
+    /// This fetches the social feed from network (or loads from cache)
+    /// so HomeView has data ready immediately when it appears.
+    private func preloadFeedData() async {
+        // 1. Try loading cached feed first (instant, from disk)
+        let cachedFeed = FeedService.shared.loadCachedFeed()
+        
+        if !cachedFeed.isEmpty {
+            // Cache is warm — home will load instantly from cache
+            // Also trigger a background network refresh (don't wait)
+            return
+        }
+        
+        // 2. No cache — fetch from network so home isn't empty
+        do {
+            _ = try await FeedService.shared.fetchSimpleFeed(limit: 50)
+            // This also saves to cache internally, so HomeViewModel will find it
+        } catch {
+            print("⚠️ Preload feed failed: \(error.localizedDescription)")
+            // Not critical — home will show empty state and retry
         }
     }
     
@@ -222,6 +257,21 @@ struct SplashView: View {
             // Profile doesn't exist, go to setup
             withAnimation {
                 destination = .profileSetup
+            }
+        }
+    }
+    
+    /// Listen for auth state changes (sign out, token refresh, etc.)
+    private func listenForAuthChanges() {
+        Task {
+            for await (event, _) in SupabaseManager.shared.client.auth.authStateChanges {
+                if event == .signedOut {
+                    await MainActor.run {
+                        withAnimation {
+                            destination = .login
+                        }
+                    }
+                }
             }
         }
     }

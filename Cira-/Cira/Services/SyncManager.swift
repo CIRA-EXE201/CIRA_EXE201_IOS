@@ -697,5 +697,51 @@ final class SyncManager: ObservableObject {
     func forceSyncAll() async {
         await performFullSync()
     }
+    
+    // MARK: - Clear All Local Data (Sign Out)
+    /// Deletes all local SwiftData objects and resets sync state.
+    /// Call this when user signs out to prevent data leakage to next user.
+    func clearAllLocalData() {
+        guard let modelContext = modelContext else {
+            print("⚠️ clearAllLocalData: No modelContext")
+            return
+        }
+        
+        do {
+            // Delete all Photos
+            let photos = try modelContext.fetch(FetchDescriptor<Photo>())
+            for photo in photos {
+                modelContext.delete(photo)
+            }
+            
+            // Delete all VoiceNotes
+            let voiceNotes = try modelContext.fetch(FetchDescriptor<VoiceNote>())
+            for note in voiceNotes {
+                modelContext.delete(note)
+            }
+            
+            // Delete all Chapters
+            let chapters = try modelContext.fetch(FetchDescriptor<Chapter>())
+            for chapter in chapters {
+                modelContext.delete(chapter)
+            }
+            
+            try modelContext.save()
+            
+            // Reset sync timestamp
+            lastSyncTime = nil
+            
+            // Clear downloaded voice/video files from Documents
+            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let files = (try? FileManager.default.contentsOfDirectory(atPath: documentsPath.path)) ?? []
+            for file in files where file.hasPrefix("voice_") || file.hasPrefix("livephoto_") {
+                try? FileManager.default.removeItem(at: documentsPath.appendingPathComponent(file))
+            }
+            
+            print("🗑️ SyncManager: All local data cleared for sign out")
+        } catch {
+            print("❌ Failed to clear local data: \(error)")
+        }
+    }
 }
 

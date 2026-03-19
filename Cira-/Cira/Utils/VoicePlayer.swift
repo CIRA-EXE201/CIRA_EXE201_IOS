@@ -14,6 +14,7 @@ class VoicePlayer: NSObject, ObservableObject {
     @Published var isPlaying = false
     @Published var playbackProgress: Double = 0
     @Published var duration: TimeInterval = 0
+    @Published var currentTime: TimeInterval = 0
     @Published var errorMessage: String?
     
     private var audioPlayer: AVAudioPlayer?
@@ -137,6 +138,7 @@ class VoicePlayer: NSObject, ObservableObject {
             Task { @MainActor in
                 guard let self = self, let player = self.audioPlayer, player.duration > 0 else { return }
                 self.playbackProgress = player.currentTime / player.duration
+                self.currentTime = player.currentTime
             }
         }
     }
@@ -155,6 +157,7 @@ class VoicePlayer: NSObject, ObservableObject {
         audioPlayer?.currentTime = 0
         isPlaying = false
         playbackProgress = 0
+        currentTime = 0
         playbackTimer?.invalidate()
         playbackTimer = nil
     }

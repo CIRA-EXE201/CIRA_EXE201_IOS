@@ -13,6 +13,7 @@ import Supabase
 @Observable
 class HomeScrollState {
     var isViewingPosts = false
+    var isCameraCaptured = false
     var scrollToCameraAction: (() -> Void)?
 }
 
@@ -80,6 +81,9 @@ struct ContentView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 30, coordinateSpace: .local)
                     .onEnded { value in
+                        // Disable tab swipe when camera is in captured mode
+                        guard !homeScrollState.isCameraCaptured else { return }
+                        
                         // Only trigger if horizontal movement is dominant
                         let horizontalAmount = value.translation.width
                         let verticalAmount = value.translation.height
@@ -104,10 +108,13 @@ struct ContentView: View {
             )
             
             // Custom Tab Bar
-            CustomTabBar(
-                selectedTab: $selectedTab,
-                homeScrollState: homeScrollState
-            )
+            // Hide tab bar when camera is in captured mode
+            if !homeScrollState.isCameraCaptured {
+                CustomTabBar(
+                    selectedTab: $selectedTab,
+                    homeScrollState: homeScrollState
+                )
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onChange(of: selectedTab) { _ in

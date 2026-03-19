@@ -276,13 +276,7 @@ struct ChapterDetailView: View {
                             PostCardView(post: post, cardWidth: cardWidth, cardHeight: cardHeight, safeAreaTop: geometry.safeAreaInsets.top)
                             
                             // Voice waveform bar for this post
-                            if post.photos.first?.hasVoice == true {
-                                compactVoiceBar
-                            } else {
-                                Color.clear
-                                    .frame(height: 64)
-                                    .padding(.horizontal, 20)
-                            }
+                            voiceBarForPost(post)
                         }
                         .frame(width: geometry.size.width)
                         .offset(y: cardTopOffset + CGFloat(index - currentPostIndex) * postAreaHeight + cardDragOffset)
@@ -295,43 +289,16 @@ struct ChapterDetailView: View {
         }
     }
     
-    // MARK: - Compact Voice Bar (copied from HomeView)
-    private var compactVoiceBar: some View {
-        HStack(spacing: 10) {
-            Button(action: {}) {
-                Circle()
-                    .fill(Color.black)
-                    .frame(width: 36, height: 36)
-                    .overlay {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white)
-                    }
-            }
-            
-            HStack(spacing: 2) {
-                ForEach(0..<30, id: \.self) { index in
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: 3, height: CGFloat.random(in: 8...24))
-                }
-            }
-            
-            Spacer()
-            
-            Text("0:15")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+    // MARK: - Compact Voice Bar (using VoiceBarView component)
+    @ViewBuilder
+    private func voiceBarForPost(_ post: Post) -> some View {
+        if let voiceNote = post.photos.first?.voiceNote {
+            VoiceBarView(voiceNote: voiceNote)
+        } else {
+            Color.clear
+                .frame(height: 64)
+                .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(
-            Capsule()
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.08), radius: 10, y: 3)
-        )
-        .padding(.horizontal, 20)
     }
     
     // MARK: - Empty View

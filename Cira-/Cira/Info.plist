@@ -8,16 +8,25 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>tutu.Cira-</string>
+			<string>com.cira.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.565368166999-c8mpppcpess1k115s219njn4mfslf3mb</string>
 				<string>cira</string>
 			</array>
 		</dict>
-
 	</array>
 	<key>GIDClientID</key>
 	<string>565368166999-c8mpppcpess1k115s219njn4mfslf3mb.apps.googleusercontent.com</string>
+	<key>NSCameraUsageDescription</key>
+	<string>CIRA cần truy cập camera để chụp ảnh và ghi lại khoảnh khắc hàng ngày của bạn.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CIRA cần truy cập microphone để ghi lại tin nhắn thoại cho bạn bè và gia đình.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CIRA cần truy cập thư viện ảnh để bạn chọn ảnh đại diện.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>CIRA cần quyền lưu ảnh vào thư viện ảnh của bạn.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>CIRA cần truy cập danh bạ để tìm bạn bè đang sử dụng ứng dụng.</string>
 </dict>
 </plist>

@@ -34,6 +34,35 @@ final class SupabaseManager {
                 )
             )
         )
+        
+        // Share auth token with widget on init
+        Task {
+            await shareTokenWithWidget()
+        }
+    }
+    
+    // MARK: - Widget Token Sharing
+    private static let widgetAppGroupID = "group.com.cira.app"
+    
+    /// Share the current auth token with the widget extension via App Group UserDefaults.
+    func shareTokenWithWidget() async {
+        do {
+            let session = try await client.auth.session
+            let defaults = UserDefaults(suiteName: Self.widgetAppGroupID)
+            defaults?.set(session.accessToken, forKey: "widget_access_token")
+            defaults?.set(session.user.id.uuidString, forKey: "widget_user_id")
+            defaults?.synchronize()
+            print("✅ Shared auth token + user ID with widget")
+        } catch {
+            print("⚠️ Could not share token with widget: \(error)")
+        }
+    }
+    
+    /// Clear the widget auth token (call on sign out).
+    func clearWidgetToken() {
+        let defaults = UserDefaults(suiteName: Self.widgetAppGroupID)
+        defaults?.removeObject(forKey: "widget_access_token")
+        defaults?.synchronize()
     }
     
     // MARK: - Auth Helpers
@@ -68,7 +97,31 @@ final class SupabaseManager {
     }
     
     func signOut() async throws {
+        clearWidgetToken()
         try await client.auth.signOut()
+    }
+    
+    /// Delete the current user's account via Edge Function (cascade delete all data)
+    func deleteAccount() async throws {
+        // Get the current session token
+        guard let session = try? await client.auth.session else {
+            throw NSError(domain: "DeleteAccount", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        // Call the Edge Function
+        let response = try await client.functions.invoke(
+            "delete-user-account",
+            options: .init(
+                headers: ["Authorization": "Bearer \(session.accessToken)"]
+            )
+        )
+        
+        // Check HTTP status from the response
+        // The function returns 200 on success
+        // If we get here without throwing, assume success
+        
+        // Sign out locally
+        try? await client.auth.signOut()
     }
     
     // MARK: - Storage Helpers

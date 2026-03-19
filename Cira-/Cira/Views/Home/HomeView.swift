@@ -55,37 +55,43 @@ struct HomeView: View {
                         ScrollView(.vertical, showsIndicators: false) {
                             LazyVStack(spacing: 0) {
                                 // 1. Camera Page
-                                CameraView(screenSize: fullScreenSize, safeArea: safeArea)
-                                    .containerRelativeFrame(.vertical)
-                                    .id("camera")
+                                CameraView(screenSize: fullScreenSize, safeArea: safeArea, scrollState: scrollState)
+                                .containerRelativeFrame(.vertical)
+                                .id("camera")
                                 
-                                // 2. Post Pages
-                                ForEach(viewModel.combinedPosts) { post in
-                                    ContentPageWrapper(screenSize: fullScreenSize, safeArea: safeArea) {
-                                        PostCardView(
-                                            post: post,
-                                            cardWidth: fullScreenSize.width,
-                                            cardHeight: CardDimensions.calculateCardHeight(screenHeight: fullScreenSize.height, safeArea: safeArea),
-                                            safeAreaTop: safeArea.top
-                                        )
-                                    } controls: {
-                                        PostControlsView(
-                                            post: post,
-                                            isQuickReplyFocused: isQuickReplyFocused && quickReplyPost?.id == post.id,
-                                            onLikeToggle: { postId in
-                                                viewModel.toggleLike(for: postId)
-                                            },
-                                            onReplyTap: {
-                                                quickReplyText = ""
-                                                quickReplyPost = post
-                                                isQuickReplyFocused = true
-                                            }
-                                        )
-                                    }
-                                    .containerRelativeFrame(.vertical)
-                                    .id(post.id.uuidString)
-                                    .onAppear {
-                                        viewModel.loadMoreIfNeeded(currentPost: post)
+                                // 2. Post Pages or Empty State
+                                if viewModel.combinedPosts.isEmpty && !viewModel.isInitialLoading && viewModel.friendWalls.isEmpty {
+                                    EmptyFeedCard(screenSize: fullScreenSize, safeArea: safeArea, showSocialHub: $showSocialHub)
+                                        .containerRelativeFrame(.vertical)
+                                        .id("empty-feed")
+                                } else if !viewModel.combinedPosts.isEmpty {
+                                    ForEach(viewModel.combinedPosts) { post in
+                                        ContentPageWrapper(screenSize: fullScreenSize, safeArea: safeArea) {
+                                            PostCardView(
+                                                post: post,
+                                                cardWidth: fullScreenSize.width,
+                                                cardHeight: CardDimensions.calculateCardHeight(screenHeight: fullScreenSize.height, safeArea: safeArea),
+                                                safeAreaTop: safeArea.top
+                                            )
+                                        } controls: {
+                                            PostControlsView(
+                                                post: post,
+                                                isQuickReplyFocused: isQuickReplyFocused && quickReplyPost?.id == post.id,
+                                                onLikeToggle: { postId in
+                                                    viewModel.toggleLike(for: postId)
+                                                },
+                                                onReplyTap: {
+                                                    quickReplyText = ""
+                                                    quickReplyPost = post
+                                                    isQuickReplyFocused = true
+                                                }
+                                            )
+                                        }
+                                        .containerRelativeFrame(.vertical)
+                                        .id(post.id.uuidString)
+                                        .onAppear {
+                                            viewModel.loadMoreIfNeeded(currentPost: post)
+                                        }
                                     }
                                 }
                             }
@@ -94,6 +100,7 @@ struct HomeView: View {
                         .scrollPosition(id: $currentScrollID)
                         .scrollTargetBehavior(.paging)
                         .scrollBounceBehavior(.basedOnSize)
+                        .scrollDisabled(scrollState.isCameraCaptured)
                         .ignoresSafeArea(.all)
                         .onChange(of: currentScrollID) { _, newID in
                             withAnimation(.easeInOut(duration: 0.2)) {

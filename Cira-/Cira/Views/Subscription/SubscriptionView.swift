@@ -274,11 +274,34 @@ struct SubscriptionView: View {
     }
     
     // MARK: - Terms
+    @State private var showTerms = false
+    @State private var showPrivacy = false
+    
     private var termsText: some View {
-        Text("Đăng ký là bạn đồng ý với [Điều khoản](terms) và [Chính sách Bảo mật](privacy)")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
+        HStack(spacing: 4) {
+            Text("Đăng ký là bạn đồng ý với")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            Button("Điều khoản") { showTerms = true }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.black)
+            
+            Text("và")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            Button("Chính sách Bảo mật") { showPrivacy = true }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.black)
+        }
+        .multilineTextAlignment(.center)
+        .sheet(isPresented: $showTerms) {
+            TermsOfServiceView()
+        }
+        .sheet(isPresented: $showPrivacy) {
+            PrivacyPolicyView()
+        }
     }
 }
 

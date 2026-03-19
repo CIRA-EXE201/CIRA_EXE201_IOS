@@ -334,6 +334,12 @@ final class HomeViewModel: ObservableObject {
                     newDisplayPosts.append(post)
                 }
                 self.feedPosts.insert(contentsOf: newDisplayPosts, at: 0)
+                
+                // Prefetch images for new posts
+                let newImageURLs = newDisplayPosts.compactMap { $0.photos.first?.imageURL }
+                if !newImageURLs.isEmpty {
+                    ImageCacheManager.shared.prefetch(urls: newImageURLs)
+                }
             }
             
             // Update conversion index to match full raw feed
@@ -383,6 +389,14 @@ final class HomeViewModel: ObservableObject {
         self.feedPosts.append(contentsOf: newDisplayPosts)
         self.currentConversionIndex = endIndex
         self.isConvertingPosts = false
+        
+        // Prefetch image data into cache so images display instantly when scrolled to
+        let imageURLs = newDisplayPosts.compactMap { post -> URL? in
+            post.photos.first?.imageURL
+        }
+        if !imageURLs.isEmpty {
+            ImageCacheManager.shared.prefetch(urls: imageURLs)
+        }
     }
     
     // Trigger from view when scrolling
@@ -390,13 +404,13 @@ final class HomeViewModel: ObservableObject {
     func loadMoreIfNeeded(currentPost: Post) {
         guard !isConvertingPosts else { return }
         
-        // Check if we are near the bottom of all visible posts (e.g. 1 index away from end)
+        // Check if we are near the bottom of visible posts (3 away from end for more prefetch runway)
         let combined = self.combinedPosts
         if let index = combined.firstIndex(where: { $0.id == currentPost.id }) {
-            if index >= combined.count - 2 {
-                // User is near the bottom, load the next 2 posts
+            if index >= combined.count - 3 {
+                // User is near the bottom, load the next 3 posts
                 Task {
-                    await loadMoreSocialPosts(count: 2)
+                    await loadMoreSocialPosts(count: 3)
                 }
             }
         }
